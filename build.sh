@@ -14,6 +14,36 @@ export OS_NAME VSCODE_ARCH RELEASE_VERSION CI_BUILD
 
 echo "RELEASE_VERSION=\"${RELEASE_VERSION}\""
 
+# macOS: map CERTIFICATE_OSX_* to electron-builder envs (CSC_*, APPLE_*)
+if [[ "${OS_NAME}" == "osx" ]]; then
+  # Write P12 from base64 and export CSC envs
+  if [[ -n "${CERTIFICATE_OSX_P12_DATA}" ]]; then
+    TMP_BASE="${RUNNER_TEMP:-/tmp}"
+    mkdir -p "${TMP_BASE}"
+    CERT_FILE="${TMP_BASE}/macos_signing_${RANDOM}.p12"
+    if base64 --help 2>&1 | grep -q "--decode"; then
+      echo "${CERTIFICATE_OSX_P12_DATA}" | base64 --decode > "${CERT_FILE}"
+    else
+      echo "${CERTIFICATE_OSX_P12_DATA}" | base64 -D > "${CERT_FILE}"
+    fi
+    export CSC_LINK="${CERT_FILE}"
+    if [[ -n "${CERTIFICATE_OSX_P12_PASSWORD}" ]]; then
+      export CSC_KEY_PASSWORD="${CERTIFICATE_OSX_P12_PASSWORD}"
+    fi
+  fi
+
+  # Map Apple notarization envs if not already set
+  if [[ -n "${CERTIFICATE_OSX_ID}" && -z "${APPLE_ID}" ]]; then
+    export APPLE_ID="${CERTIFICATE_OSX_ID}"
+  fi
+  if [[ -n "${CERTIFICATE_OSX_APP_PASSWORD}" && -z "${APPLE_ID_PASSWORD}" ]]; then
+    export APPLE_ID_PASSWORD="${CERTIFICATE_OSX_APP_PASSWORD}"
+  fi
+  if [[ -n "${CERTIFICATE_OSX_TEAM_ID}" && -z "${APPLE_TEAM_ID}" ]]; then
+    export APPLE_TEAM_ID="${CERTIFICATE_OSX_TEAM_ID}"
+  fi
+fi
+
 # Ensure app dir exists (auto-detect or clone if needed)
 ensure_app_dir
 
