@@ -84,20 +84,34 @@ ensure_app_dir() {
   fi
 
   # Fallback: clone from APP_REPO into local subdir
-  local dest="./qinglion_yuejuan"
   local repo="${APP_REPO}"
+  local dest
   local clone_url
+  local token
 
+  # derive dest dir from repo name
   if [[ "${repo}" == http://* || "${repo}" == https://* ]]; then
-    clone_url="${repo%.git}.git"
+    dest="./$( basename "${repo%.git}" )"
   else
-    clone_url="https://github.com/${repo}.git"
+    dest="./$( basename "${repo}" )"
   fi
 
-  # Inject token if available for private repos
-  local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  if [[ -n "${token}" && "${clone_url}" == https://github.com/* ]]; then
-    clone_url="${clone_url/https:\/\//https:\/\/${token}@}"
+  token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ "${repo}" == http://* || "${repo}" == https://* ]]; then
+    if [[ -n "${token}" ]]; then
+      # https://<token>@github.com/owner/repo.git
+      clone_url="https://${token}@${repo#https://}"
+      clone_url="${clone_url%.git}.git"
+    else
+      clone_url="${repo%.git}.git"
+    fi
+  else
+    if [[ -n "${token}" ]]; then
+      clone_url="https://${token}@github.com/${repo%.git}.git"
+    else
+      clone_url="https://github.com/${repo%.git}.git"
+    fi
   fi
 
   echo "Cloning app repo: ${APP_REPO} -> ${dest}"
