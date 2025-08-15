@@ -1,0 +1,77 @@
+name: yuejuan-macos
+
+on:
+  workflow_dispatch: {}
+
+env:
+  APP_NAME: QingLion
+  APP_QUALITY: stable
+  ASSETS_REPOSITORY: https://github.com/qinglion/yuejuan-binaries
+  VERSIONS_REPOSITORY: https://github.com/qinglion/yuejuan-versions
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x64
+          - runner: macos-14
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      VSCODE_ARCH: ${{ matrix.arch }}
+      # Speed up sqlite3 binary download in install
+      npm_config_node_sqlite3_binary_host_mirror: https://registry.npmmirror.com/-/binary/sqlite3/
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 14 (fermium)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '14'
+
+      - name: Build and collect assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
+          # macOS signing/notarization (optional)
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          bash build.sh
+
+      - name: Prepare checksums
+        run: bash prepare_checksums.sh
+
+      - name: Upload to OSS
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          PUBLIC_DOWNLOAD_DOMAIN: ${{ secrets.PUBLIC_DOWNLOAD_DOMAIN }}
+          VSCODE_PLATFORM: darwin
+        run: bash upload_to_oss.sh
+        # Required step; script fails if missing creds
+      - name: Update versions repo
+        env:
+          SHOULD_BUILD: 'yes'
+          GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
+          GITHUB_USERNAME: ${{ github.repository_owner }}
+          PUBLIC_DOWNLOAD_DOMAIN: ${{ secrets.PUBLIC_DOWNLOAD_DOMAIN }}
+          VSCODE_PLATFORM: darwin
+        run: bash release.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: yuejuan-macos-${{ matrix.arch }}
+          path: assets/
+          retention-days: 7
+
+
