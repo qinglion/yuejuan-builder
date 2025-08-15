@@ -36,8 +36,15 @@ if [[ "${OS_NAME}" == "osx" ]]; then
   if [[ -n "${CERTIFICATE_OSX_ID}" && -z "${APPLE_ID}" ]]; then
     export APPLE_ID="${CERTIFICATE_OSX_ID}"
   fi
-  if [[ -n "${CERTIFICATE_OSX_APP_PASSWORD}" && -z "${APPLE_ID_PASSWORD}" ]]; then
-    export APPLE_ID_PASSWORD="${CERTIFICATE_OSX_APP_PASSWORD}"
+  if [[ -n "${CERTIFICATE_OSX_APP_PASSWORD}" ]]; then
+    # For legacy flows that still read APPLE_ID_PASSWORD
+    if [[ -z "${APPLE_ID_PASSWORD}" ]]; then
+      export APPLE_ID_PASSWORD="${CERTIFICATE_OSX_APP_PASSWORD}"
+    fi
+    # Newer @electron/notarize expects APPLE_APP_SPECIFIC_PASSWORD
+    if [[ -z "${APPLE_APP_SPECIFIC_PASSWORD}" ]]; then
+      export APPLE_APP_SPECIFIC_PASSWORD="${CERTIFICATE_OSX_APP_PASSWORD}"
+    fi
   fi
   if [[ -n "${CERTIFICATE_OSX_TEAM_ID}" && -z "${APPLE_TEAM_ID}" ]]; then
     export APPLE_TEAM_ID="${CERTIFICATE_OSX_TEAM_ID}"
