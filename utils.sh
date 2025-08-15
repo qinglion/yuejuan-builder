@@ -11,7 +11,7 @@ VERSIONS_REPOSITORY="${VERSIONS_REPOSITORY:-https://github.com/qinglion/yuejuan-
 
 # Upstream app repo and source path
 # APP_REPO accepts either full http(s) URL or "owner/repo" form
-APP_REPO="${APP_REPO:-https://github.com/haozan//qinglion_yuejuan}"
+APP_REPO="${APP_REPO:-https://github.com/haozan/qinglion_yuejuan}"
 # Where the app source lives (always freshly cloned in CI unless explicitly provided)
 APP_DIR="${APP_DIR:-}"
 
