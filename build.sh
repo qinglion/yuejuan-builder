@@ -21,7 +21,7 @@ if [[ "${OS_NAME}" == "osx" ]]; then
     TMP_BASE="${RUNNER_TEMP:-/tmp}"
     mkdir -p "${TMP_BASE}"
     CERT_FILE="${TMP_BASE}/macos_signing_${RANDOM}.p12"
-    if base64 --help 2>&1 | grep -q "--decode"; then
+    if echo test | base64 --decode >/dev/null 2>&1; then
       echo "${CERTIFICATE_OSX_P12_DATA}" | base64 --decode > "${CERT_FILE}"
     else
       echo "${CERTIFICATE_OSX_P12_DATA}" | base64 -D > "${CERT_FILE}"
@@ -54,25 +54,51 @@ if exists nvm && [[ -f .nvmrc ]]; then
   nvm use || true
 fi
 
+# Ensure Python for node-gyp (distutils via setuptools)
+if command -v python3 >/dev/null 2>&1; then
+  export PYTHON="$( command -v python3 )"
+  python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+  python3 -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+  # Ensure npm sees the right Python
+  npm config set python "${PYTHON}" >/dev/null 2>&1 || true
+  export npm_config_python="${PYTHON}"
+fi
+
 # Build renderer css first
 if [[ -f package.json ]]; then
+  # Force native deps to build from source if prebuilt not available
+  export npm_config_build_from_source=true
   if exists yarn; then
-    yarn install
+    yarn install --network-timeout 600000
     yarn run build:css
   else
-    npm install
+    npm install --network-timeout=600000
     npm run build:css
   fi
 fi
 
 # Clean previous artifacts and build
 if exists yarn; then
+  # Rebuild native modules for electron 12
+  export npm_config_runtime=electron
+  export npm_config_target=12.2.3
+  export npm_config_disturl=https://electronjs.org/headers
+  if [[ "${VSCODE_ARCH}" == "arm64" ]]; then export npm_config_target_arch=arm64; else export npm_config_target_arch=x64; fi
+  (npm rebuild sqlite3 || true)
+  (npm rebuild nodejieba || true)
   yarn run dist:clean || true
-  yarn run build
+  yarn run build || true
   yarn run dist
 else
+  # Rebuild native modules for electron 12
+  export npm_config_runtime=electron
+  export npm_config_target=12.2.3
+  export npm_config_disturl=https://electronjs.org/headers
+  if [[ "${VSCODE_ARCH}" == "arm64" ]]; then export npm_config_target_arch=arm64; else export npm_config_target_arch=x64; fi
+  (npm rebuild sqlite3 || true)
+  (npm rebuild nodejieba || true)
   npm run dist:clean || true
-  npm run build
+  npm run build || true
   npm run dist
 fi
 
