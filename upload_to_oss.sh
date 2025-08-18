@@ -6,8 +6,10 @@ set -e
 # Echo envs
 echo "----------- OSS Upload -----------"
 echo "OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID:0:8}..."
+echo "OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET:0:8}..."
 echo "OSS_BUCKET_NAME=${OSS_BUCKET_NAME}"
 echo "OSS_ENDPOINT=${OSS_ENDPOINT}"
+echo "OSS_REGION=${OSS_REGION}"
 echo "APP_NAME=${APP_NAME}"
 echo "RELEASE_VERSION=${RELEASE_VERSION}"
 echo "VSCODE_PLATFORM=${VSCODE_PLATFORM}"
@@ -21,18 +23,45 @@ fi
 # Install ossutil 2.x if not present
 if ! command -v ossutil &> /dev/null; then
   echo "Installing ossutil..."
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-arm64.zip -o ossutil.zip
+  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if [[ "$(uname -m)" == "x86_64" ]]; then
+      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-linux-amd64.zip -o ossutil.zip
+      unzip -q ossutil.zip
+      chmod 755 ossutil-v2.1.1-linux-amd64/ossutil
+      sudo mv ossutil-v2.1.1-linux-amd64/ossutil /usr/local/bin/
+      rm -rf ossutil.zip ossutil-v2.1.1-linux-amd64
+    else
+      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-linux-arm64.zip -o ossutil.zip
+      unzip -q ossutil.zip
+      chmod 755 ossutil-2.1.1-linux-arm64/ossutil
+      sudo mv ossutil-2.1.1-linux-arm64/ossutil /usr/local/bin/
+      rm -rf ossutil.zip ossutil-2.1.1-linux-arm64
+    fi
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "$(uname -m)" == "x86_64" ]]; then
+      # macOS Intel
+      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-amd64.zip -o ossutil.zip
+      unzip -q ossutil.zip
+      chmod 755 ossutil-2.1.2-mac-amd64/ossutil
+      sudo mv ossutil-2.1.2-mac-amd64/ossutil /usr/local/bin/
+      rm -rf ossutil.zip ossutil-2.1.2-mac-amd64
+    else
+      # macOS Apple Silicon
+      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-arm64.zip -o ossutil.zip
+      unzip -q ossutil.zip
+      chmod 755 ossutil-2.1.2-mac-arm64/ossutil
+      sudo mv ossutil-2.1.2-mac-arm64/ossutil /usr/local/bin/
+      rm -rf ossutil.zip ossutil-2.1.2-mac-arm64
+    fi
+  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-windows-amd64-go1.20.zip -o ossutil.zip
     unzip -q ossutil.zip
-    chmod 755 ossutil-2.1.2-mac-arm64/ossutil
-    sudo mv ossutil-2.1.2-mac-arm64/ossutil /usr/local/bin/
-    rm -rf ossutil.zip ossutil-2.1.2-mac-arm64
-  else
-    curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-linux-amd64.zip -o ossutil.zip
-    unzip -q ossutil.zip
-    chmod 755 ossutil-v2.1.1-linux-amd64/ossutil
-    sudo mv ossutil-v2.1.1-linux-amd64/ossutil /usr/local/bin/
-    rm -rf ossutil.zip ossutil-v2.1.1-linux-amd64
+    # Create local bin directory if it doesn't exist and move ossutil there
+    mkdir -p "./bin"
+    mv ossutil-2.1.1-windows-amd64-go1.20/ossutil.exe ./bin/
+    # Add local bin to PATH for current session
+    export PATH="$(pwd)/bin:$PATH"
+    rm -rf ossutil.zip ossutil-2.1.1-windows-amd64-go1.20
   fi
 fi
 
@@ -44,14 +73,26 @@ upload_to_oss() {
   local file_path="$1"; local file_name="$2"; local platform="$3"
   local oss_path="${APP_NAME}/${RELEASE_VERSION}/${platform}/${file_name}"
   echo "Uploading ${file_name} -> oss://${OSS_BUCKET_NAME}/${oss_path}"
-  ossutil cp "${file_path}" "oss://${OSS_BUCKET_NAME}/${oss_path}" \
-    --access-key-id "${OSS_ACCESS_KEY_ID}" \
-    --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
-    --endpoint "https://${OSS_ENDPOINT}"
-  ossutil set-acl "oss://${OSS_BUCKET_NAME}/${oss_path}" public-read \
-    --access-key-id "${OSS_ACCESS_KEY_ID}" \
-    --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
-    --endpoint "https://${OSS_ENDPOINT}"
+  for i in {1..3}; do
+    if ossutil cp "${file_path}" "oss://${OSS_BUCKET_NAME}/${oss_path}" \
+      --access-key-id "${OSS_ACCESS_KEY_ID}" \
+      --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
+      --endpoint "https://${OSS_ENDPOINT}"; then
+      ossutil set-acl "oss://${OSS_BUCKET_NAME}/${oss_path}" public-read \
+        --access-key-id "${OSS_ACCESS_KEY_ID}" \
+        --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
+        --endpoint "https://${OSS_ENDPOINT}"
+      echo "Successfully uploaded ${file_name} (attempt ${i})"
+      return 0
+    else
+      echo "Failed to upload ${file_name} (attempt ${i})"
+      if [[ $i -eq 3 ]]; then
+        echo "Failed to upload ${file_name} after 3 attempts"
+        return 1
+      fi
+      sleep 10
+    fi
+  done
 }
 
 cd assets || { echo "[ERROR] assets dir not found"; exit 1; }
