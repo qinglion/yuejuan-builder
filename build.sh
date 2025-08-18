@@ -14,9 +14,9 @@ export OS_NAME VSCODE_ARCH RELEASE_VERSION CI_BUILD
 
 echo "RELEASE_VERSION=\"${RELEASE_VERSION}\""
 
-# macOS: map CERTIFICATE_OSX_* to electron-builder envs (CSC_*, APPLE_*)
+# macOS: 仅收敛为四个核心变量，并做兼容映射
 if [[ "${OS_NAME}" == "osx" ]]; then
-  # Write P12 from base64 and export CSC envs
+  # 1) 证书：CERTIFICATE_OSX_P12_DATA -> 临时 .p12 文件 -> CSC_LINK；密码 -> CSC_KEY_PASSWORD
   if [[ -n "${CERTIFICATE_OSX_P12_DATA}" ]]; then
     TMP_BASE="${RUNNER_TEMP:-/tmp}"
     mkdir -p "${TMP_BASE}"
@@ -27,39 +27,16 @@ if [[ "${OS_NAME}" == "osx" ]]; then
       echo "${CERTIFICATE_OSX_P12_DATA}" | base64 -D > "${CERT_FILE}"
     fi
     export CSC_LINK="${CERT_FILE}"
-    if [[ -n "${CERTIFICATE_OSX_P12_PASSWORD}" ]]; then
-      export CSC_KEY_PASSWORD="${CERTIFICATE_OSX_P12_PASSWORD}"
-    fi
+    export CSC_KEY_PASSWORD="${CERTIFICATE_OSX_P12_PASSWORD}"
   fi
 
-  # Map Apple notarization envs if not already set
-  if [[ -n "${CERTIFICATE_OSX_ID}" && -z "${APPLE_ID}" ]]; then
-    export APPLE_ID="${CERTIFICATE_OSX_ID}"
+  # 这段代码的意思是：如果环境变量 appleId 没有被设置（为空），但 CERTIFICATE_OSX_P12_PASSWORD 已经有值，
+  # 就把 CERTIFICATE_OSX_P12_PASSWORD 的值赋给 appleId ，并导出到环境变量中。
+  if [[ -z "${appleId}" && -n "${CERTIFICATE_OSX_ID}" ]]; then
+    export appleId="${CERTIFICATE_OSX_ID}"
   fi
-  if [[ -n "${CERTIFICATE_OSX_APP_PASSWORD}" ]]; then
-    # For legacy flows that still read APPLE_ID_PASSWORD
-    if [[ -z "${APPLE_ID_PASSWORD}" ]]; then
-      export APPLE_ID_PASSWORD="${CERTIFICATE_OSX_APP_PASSWORD}"
-    fi
-    # Newer @electron/notarize expects APPLE_APP_SPECIFIC_PASSWORD
-    if [[ -z "${APPLE_APP_SPECIFIC_PASSWORD}" ]]; then
-      export APPLE_APP_SPECIFIC_PASSWORD="${CERTIFICATE_OSX_APP_PASSWORD}"
-    fi
-  fi
-  if [[ -n "${CERTIFICATE_OSX_TEAM_ID}" && -z "${APPLE_TEAM_ID}" ]]; then
-    export APPLE_TEAM_ID="${CERTIFICATE_OSX_TEAM_ID}"
-  fi
-
-  # Redundant envs for various notary helpers
-  if [[ -n "${APPLE_ID}" ]]; then
-    export NOTARIZE_APPLE_ID="${APPLE_ID}"
-  fi
-  if [[ -n "${APPLE_APP_SPECIFIC_PASSWORD}" ]]; then
-    export NOTARIZE_APPLE_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD}"
-    export APPLE_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD}"
-  fi
-  if [[ -n "${APPLE_TEAM_ID}" ]]; then
-    export NOTARIZE_TEAM_ID="${APPLE_TEAM_ID}"
+  if [[ -z "${appleApiKey}" && -n "${CERTIFICATE_OSX_APP_PASSWORD}" ]]; then
+    export appleApiKey="${CERTIFICATE_OSX_APP_PASSWORD}"
   fi
 fi
 
