@@ -47,7 +47,7 @@ bash upload_to_oss.sh
 ```bash
 export GH_TOKEN=ghp_xxx
 export SHOULD_BUILD=yes
-export APP_NAME="QingLion"
+export APP_NAME="Yuejuan"
 export APP_QUALITY=stable
 export ASSETS_REPOSITORY="qinglion/binaries"
 export VERSIONS_REPOSITORY="qinglion/versions"
