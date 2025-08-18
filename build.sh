@@ -49,6 +49,18 @@ if [[ "${OS_NAME}" == "osx" ]]; then
   if [[ -n "${CERTIFICATE_OSX_TEAM_ID}" && -z "${APPLE_TEAM_ID}" ]]; then
     export APPLE_TEAM_ID="${CERTIFICATE_OSX_TEAM_ID}"
   fi
+
+  # Redundant envs for various notary helpers
+  if [[ -n "${APPLE_ID}" ]]; then
+    export NOTARIZE_APPLE_ID="${APPLE_ID}"
+  fi
+  if [[ -n "${APPLE_APP_SPECIFIC_PASSWORD}" ]]; then
+    export NOTARIZE_APPLE_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD}"
+    export APPLE_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD}"
+  fi
+  if [[ -n "${APPLE_TEAM_ID}" ]]; then
+    export NOTARIZE_TEAM_ID="${APPLE_TEAM_ID}"
+  fi
 fi
 
 # Ensure app dir exists (auto-detect or clone if needed)
