@@ -61,14 +61,10 @@ if [[ "${OS_NAME}" == "osx" ]]; then
   if command -v jq >/dev/null 2>&1; then
     cp package.json package.json.bak
     tmp_json=$( jq \
-      --arg teamId "${APPLE_TEAM_ID}" \
-      --arg appleId "${APPLE_ID}" \
-      --arg appPwd "${APPLE_APP_SPECIFIC_PASSWORD}" \
+      --arg ascProvider "${APPLE_TEAM_ID}" \
       --arg appBundleId "com.qinglion.storm" \
       '(.build.mac.notarize //= {})
-       | .build.mac.notarize.teamId = $teamId
-       | .build.mac.notarize.appleId = $appleId
-       | .build.mac.notarize.appleAppSpecificPassword = $appPwd
+       | .build.mac.notarize.ascProvider = $ascProvider
        | .build.mac.notarize.appBundleId = $appBundleId
        | (if .build.afterSign then del(.build.afterSign) else . end)' package.json )
     echo "${tmp_json}" > package.json && unset tmp_json
