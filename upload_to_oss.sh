@@ -25,17 +25,17 @@ if ! command -v ossutil &> /dev/null; then
   echo "Installing ossutil..."
   if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     if [[ "$(uname -m)" == "x86_64" ]]; then
-      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-linux-amd64.zip -o ossutil.zip
+      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip -o ossutil.zip
       unzip -q ossutil.zip
-      chmod 755 ossutil-v2.1.1-linux-amd64/ossutil
-      sudo mv ossutil-v2.1.1-linux-amd64/ossutil /usr/local/bin/
-      rm -rf ossutil.zip ossutil-v2.1.1-linux-amd64
+      chmod 755 ossutil-v2.1.2-linux-amd64/ossutil
+      sudo mv ossutil-v2.1.2-linux-amd64/ossutil /usr/local/bin/
+      rm -rf ossutil.zip ossutil-v2.1.2-linux-amd64
     else
-      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-linux-arm64.zip -o ossutil.zip
+      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-arm64.zip -o ossutil.zip
       unzip -q ossutil.zip
-      chmod 755 ossutil-2.1.1-linux-arm64/ossutil
-      sudo mv ossutil-2.1.1-linux-arm64/ossutil /usr/local/bin/
-      rm -rf ossutil.zip ossutil-2.1.1-linux-arm64
+      chmod 755 ossutil-2.1.2-linux-arm64/ossutil
+      sudo mv ossutil-2.1.2-linux-arm64/ossutil /usr/local/bin/
+      rm -rf ossutil.zip ossutil-2.1.2-linux-arm64
     fi
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     if [[ "$(uname -m)" == "x86_64" ]]; then
@@ -54,14 +54,14 @@ if ! command -v ossutil &> /dev/null; then
       rm -rf ossutil.zip ossutil-2.1.2-mac-arm64
     fi
   elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-windows-amd64-go1.20.zip -o ossutil.zip
+    curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-windows-amd64-go1.20.zip -o ossutil.zip
     unzip -q ossutil.zip
     # Create local bin directory if it doesn't exist and move ossutil there
     mkdir -p "./bin"
-    mv ossutil-2.1.1-windows-amd64-go1.20/ossutil.exe ./bin/
+    mv ossutil-2.1.2-windows-amd64-go1.20/ossutil.exe ./bin/
     # Add local bin to PATH for current session
     export PATH="$(pwd)/bin:$PATH"
-    rm -rf ossutil.zip ossutil-2.1.1-windows-amd64-go1.20
+    rm -rf ossutil.zip ossutil-2.1.2-windows-amd64-go1.20
   fi
 fi
 
