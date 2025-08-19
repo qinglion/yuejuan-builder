@@ -96,6 +96,26 @@ ensure_app_dir() {
     dest="./$( basename "${repo}" )"
   fi
 
+  # If destination already exists, reuse it (avoid clone failure)
+  if [[ -d "${dest}" ]]; then
+    echo "Using existing app dir: ${dest}"
+    APP_DIR="${dest}"
+    export APP_DIR
+    # Optionally update when requested
+    if [[ "${FORCE_UPDATE}" == "true" && -d "${dest}/.git" ]]; then
+      echo "Updating existing repo in ${dest}"
+      git -C "${dest}" fetch --depth=1 --tags || true
+      default_branch=$( git -C "${dest}" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's#^origin/##' || true )
+      if [[ -n "${default_branch}" ]]; then
+        git -C "${dest}" checkout -q "${default_branch}" || true
+        git -C "${dest}" pull --ff-only || true
+      else
+        git -C "${dest}" pull --ff-only || true
+      fi
+    fi
+    return 0
+  fi
+
   token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
   if [[ "${repo}" == http://* || "${repo}" == https://* ]]; then
