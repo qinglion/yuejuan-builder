@@ -130,14 +130,42 @@ updateLatestVersion() {
   echo "${JSON_DATA}"
 }
 
-# Prepare clone/push URLs for versions repo (VERSIONS_REPOSITORY is a fixed https repo URL)
-base_repo_url="${VERSIONS_REPOSITORY%.git}.git"
-REPOSITORY_NAME="$( basename "${base_repo_url%/}" )"
-REPOSITORY_NAME="${REPOSITORY_NAME%.git}"
+# Prepare clone/push URLs for versions repo (robust parsing)
+repo_input="${VERSIONS_REPOSITORY%.git}"
+repo_input="${repo_input%/}"
 
-# inject token for private access
-auth_url="${base_repo_url/https:\/\//https:\/\/${GITHUB_USERNAME}:${GITHUB_TOKEN}@}"
+# Extract host and path from VERSIONS_REPOSITORY
+if [[ "${repo_input}" == http://* || "${repo_input}" == https://* ]]; then
+  # strip scheme
+  tmp="${repo_input#*://}"
+  # strip potential creds (user[:pass]@)
+  tmp="${tmp#*@}"
+  host="${tmp%%/*}"
+  path="${tmp#*/}"
+else
+  host="${GH_HOST:-github.com}"
+  path="${repo_input}"
+fi
 
+# Normalize path to owner/repo
+path="${path%.git}"
+base_repo_url="https://${host}/${path}.git"
+
+REPOSITORY_NAME="$( basename "${path}" )"
+
+# Build auth URL if token provided
+if [[ -n "${GITHUB_TOKEN}" ]]; then
+  auth_user="${GITHUB_USERNAME:-}"  # may be empty
+  if [[ -n "${auth_user}" ]]; then
+    auth_url="https://${auth_user}:${GITHUB_TOKEN}@${host}/${path}.git"
+  else
+    auth_url="https://${GITHUB_TOKEN}@${host}/${path}.git"
+  fi
+else
+  auth_url="${base_repo_url}"
+fi
+
+echo "Cloning versions repo: ${base_repo_url} -> ${REPOSITORY_NAME}"
 git clone "${auth_url}" "${REPOSITORY_NAME}"
 cd "${REPOSITORY_NAME}" || { echo "'${REPOSITORY_NAME}' dir not found"; exit 1; }
 git config user.email "$( echo "${GITHUB_USERNAME}" | awk '{print tolower($0)}' )-ci@not-real.com"
