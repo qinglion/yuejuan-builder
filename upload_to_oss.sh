@@ -3,6 +3,18 @@
 
 set -e
 
+# Try to load helpers first (for read_release_version, etc.)
+if [[ -f ./utils.sh ]]; then
+  . ./utils.sh
+fi
+
+# Best-effort derive release version early to avoid empty path segments
+if [[ -z "${RELEASE_VERSION}" ]]; then
+  if command -v read_release_version >/dev/null 2>&1; then
+    RELEASE_VERSION="$( read_release_version )"
+  fi
+fi
+
 # Echo envs
 echo "----------- OSS Upload -----------"
 echo "OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID:0:8}..."
@@ -71,14 +83,20 @@ get_platform() {
 
 upload_to_oss() {
   local file_path="$1"; local file_name="$2"; local platform="$3"
+  # Fallback: parse version like 1.2.3 or 1.2.3-xx from file name when RELEASE_VERSION is empty
+  local inferred_version
+  if [[ -z "${RELEASE_VERSION}" ]]; then
+    inferred_version=$( echo "${file_name}" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?' | head -n1 || true )
+    RELEASE_VERSION="${inferred_version}"
+  fi
   local oss_path="${APP_NAME}/${RELEASE_VERSION}/${platform}/${file_name}"
   echo "Uploading ${file_name} -> oss://${OSS_BUCKET_NAME}/${oss_path}"
   for i in {1..3}; do
-    if ossutil cp "${file_path}" "oss://${OSS_BUCKET_NAME}/${oss_path}" \
+    if ossutil cp "${file_path}" "oss://${OSS_BUCKET_NAME}/${oss_path}" -f \
       --access-key-id "${OSS_ACCESS_KEY_ID}" \
       --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
       --endpoint "https://${OSS_ENDPOINT}"; then
-      ossutil set-acl "oss://${OSS_BUCKET_NAME}/${oss_path}" public-read \
+      ossutil set-acl "oss://${OSS_BUCKET_NAME}/${oss_path}" --acl public-read \
         --access-key-id "${OSS_ACCESS_KEY_ID}" \
         --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
         --endpoint "https://${OSS_ENDPOINT}"
