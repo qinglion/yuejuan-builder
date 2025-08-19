@@ -38,12 +38,31 @@ jobs:
           bash build.sh
 
       - name: Prepare files for signing
+        shell: pwsh
         run: |
-          mkdir -p signing_temp
-          mkdir -p signing_output
-          find assets -name "*.exe" -exec cp {} signing_temp/ \;
-          find assets -name "*.msi" -exec cp {} signing_temp/ \;
-        shell: bash
+          New-Item -ItemType Directory -Force signing_temp | Out-Null
+          New-Item -ItemType Directory -Force signing_output | Out-Null
+          $mappingPath = "signing_temp\_mapping.txt"
+          if (Test-Path $mappingPath) { Remove-Item $mappingPath -Force }
+          $usedNames = @{}
+          Get-ChildItem -Path assets -File -Include *.exe, *.msi -Recurse | ForEach-Object {
+            $origName = $_.Name
+            $chars = $origName.ToCharArray() | ForEach-Object {
+              if ([int][char]$_ -le 127) { $_ } else { '_' }
+            }
+            $asciiName = -join $chars
+            if ($asciiName -eq '') { $asciiName = 'file' }
+            $base = [System.IO.Path]::GetFileNameWithoutExtension($asciiName)
+            $ext = [System.IO.Path]::GetExtension($asciiName)
+            if ($usedNames.ContainsKey($asciiName)) {
+              $idx = ++$usedNames[$asciiName]
+              $asciiName = "$base-$idx$ext"
+            } else {
+              $usedNames[$asciiName] = 0
+            }
+            Copy-Item -LiteralPath $_.FullName -Destination ("signing_temp\" + $asciiName) -Force
+            "$asciiName|$origName" | Out-File -FilePath $mappingPath -Append -Encoding UTF8
+          }
 
       - name: Code Signing with SSL.com
         uses: sslcom/esigner-codesign@develop
@@ -63,12 +82,23 @@ jobs:
           signing_method: v1
 
       - name: Copy signed files back
+        shell: pwsh
         run: |
-          find signing_output -name "*.exe" -exec cp {} assets/ \;
-          find signing_output -name "*.msi" -exec cp {} assets/ \;
-          rm -rf signing_output
-          rm -rf signing_temp
-        shell: bash
+          $mappingPath = "signing_temp\_mapping.txt"
+          if (-not (Test-Path $mappingPath)) { throw "Mapping file not found: $mappingPath" }
+          Get-Content $mappingPath | ForEach-Object {
+            if ($_ -match '^\s*$') { return }
+            $parts = $_ -split '\|', 2
+            $asciiName = $parts[0]
+            $origName = $parts[1]
+            $signedPath = Join-Path "signing_output" $asciiName
+            if (Test-Path $signedPath) {
+              Move-Item -LiteralPath $signedPath -Destination (Join-Path "assets" $origName) -Force
+            } else {
+              Write-Warning "Signed file missing: $asciiName"
+            }
+          }
+          Remove-Item -Recurse -Force signing_output, signing_temp
 
       - name: Prepare checksums
         shell: bash
