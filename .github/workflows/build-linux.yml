@@ -46,6 +46,7 @@ jobs:
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
           OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_REGION: ${{ secrets.OSS_REGION }}
           PUBLIC_DOWNLOAD_DOMAIN: ${{ secrets.PUBLIC_DOWNLOAD_DOMAIN }}
           VSCODE_PLATFORM: linux
         run: bash upload_to_oss.sh
