@@ -35,6 +35,42 @@ jobs:
         run: |
           bash build.sh
 
+      - name: Prepare files for signing
+        run: |
+          mkdir -p signing_temp
+          mkdir -p signing_output
+          find assets -name "*.exe" -exec cp {} signing_temp/ \;
+          find assets -name "*.msi" -exec cp {} signing_temp/ \;
+        shell: bash
+        if: ${{ secrets.ES_USERNAME != '' && secrets.ES_PASSWORD != '' && secrets.CREDENTIAL_ID != '' && secrets.ES_TOTP_SECRET != '' }}
+
+      - name: Code Signing with SSL.com
+        uses: sslcom/esigner-codesign@develop
+        with:
+          command: batch_sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          dir_path: ${{ github.workspace }}/signing_temp
+          output_path: ${{ github.workspace }}/signing_output
+          override: true
+          malware_block: true
+          environment_name: PROD
+          clean_logs: true
+          jvm_max_memory: 1024M
+          signing_method: v1
+        if: ${{ secrets.ES_USERNAME != '' && secrets.ES_PASSWORD != '' && secrets.CREDENTIAL_ID != '' && secrets.ES_TOTP_SECRET != '' }}
+
+      - name: Copy signed files back
+        run: |
+          find signing_output -name "*.exe" -exec cp {} assets/ \;
+          find signing_output -name "*.msi" -exec cp {} assets/ \;
+          rm -rf signing_output
+          rm -rf signing_temp
+        shell: bash
+        if: ${{ secrets.ES_USERNAME != '' && secrets.ES_PASSWORD != '' && secrets.CREDENTIAL_ID != '' && secrets.ES_TOTP_SECRET != '' }}
+
       - name: Prepare checksums
         shell: bash
         run: bash prepare_checksums.sh
