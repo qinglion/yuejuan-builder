@@ -60,8 +60,8 @@ jobs:
           OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
           OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
           OSS_REGION: ${{ secrets.OSS_REGION }}
-          PUBLIC_DOWNLOAD_DOMAIN: ${{ secrets.PUBLIC_DOWNLOAD_DOMAIN }}
           VSCODE_PLATFORM: darwin
+          PUBLIC_DOWNLOAD_DOMAIN: d.qinglion.com
         run: bash upload_to_oss.sh
         # Required step; script fails if missing creds
       - name: Update versions repo
