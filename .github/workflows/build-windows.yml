@@ -14,7 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, arm64]
+        vscode_arch:
+          - x64
+          # - arm64
     runs-on: windows-2022
     env:
       VSCODE_ARCH: ${{ matrix.arch }}
