@@ -9,11 +9,58 @@ if [[ -f ./utils.sh ]]; then
 fi
 
 # Best-effort derive release version early to avoid empty path segments
-if [[ -z "${RELEASE_VERSION}" ]]; then
-  if command -v read_release_version >/dev/null 2>&1; then
-    RELEASE_VERSION="$( read_release_version )"
+# Missing means empty or "0.0.0" (default placeholder). We'll prefer real version if we can detect it.
+is_version_missing() { [[ -z "$1" || "$1" == "0.0.0" ]]; }
+
+# Try to locate app dir locally if not provided (common clone path derived from APP_REPO)
+detect_app_dir() {
+  if [[ -n "${APP_DIR}" && -f "${APP_DIR}/package.json" ]]; then
+    return 0
   fi
-fi
+  local candidate
+  if [[ -n "${APP_REPO}" ]]; then
+    candidate="./$( basename "${APP_REPO%.git}" )"
+    if [[ -f "${candidate}/package.json" ]]; then
+      APP_DIR="${candidate}"
+      export APP_DIR
+      return 0
+    fi
+  fi
+  # Fallback to common repo name
+  if [[ -f "./qinglion_yuejuan/package.json" ]]; then
+    APP_DIR="./qinglion_yuejuan"
+    export APP_DIR
+  fi
+}
+
+# Derive version from package.json when current version is missing
+derive_release_version() {
+  if ! is_version_missing "${RELEASE_VERSION}"; then
+    return 0
+  fi
+  detect_app_dir
+  if [[ -n "${APP_DIR}" && -f "${APP_DIR}/package.json" ]]; then
+    # Prefer direct node read to avoid helper depending on APP_DIR env in another step
+    local pkg_ver
+    pkg_ver=$( node -p "require('${APP_DIR}/package.json').version" 2>/dev/null || true )
+    if [[ -n "${pkg_ver}" ]]; then
+      RELEASE_VERSION="${pkg_ver}"
+      return 0
+    fi
+  fi
+  # As a secondary attempt, use helper if available
+  if command -v read_release_version >/dev/null 2>&1; then
+    local candidate_ver
+    candidate_ver="$( read_release_version )"
+    if [[ -n "${candidate_ver}" && "${candidate_ver}" != "0.0.0" ]]; then
+      RELEASE_VERSION="${candidate_ver}"
+      return 0
+    fi
+  fi
+}
+
+# Attempt to derive a real version before uploads
+derive_release_version
 
 # Echo envs
 echo "----------- OSS Upload -----------"
@@ -85,7 +132,7 @@ upload_to_oss() {
   local file_path="$1"; local file_name="$2"; local platform="$3"
   # Fallback: parse version like 1.2.3 or 1.2.3-xx from file name when RELEASE_VERSION is empty
   local inferred_version
-  if [[ -z "${RELEASE_VERSION}" ]]; then
+  if is_version_missing "${RELEASE_VERSION}"; then
     inferred_version=$( echo "${file_name}" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?' | head -n1 || true )
     RELEASE_VERSION="${inferred_version}"
   fi
