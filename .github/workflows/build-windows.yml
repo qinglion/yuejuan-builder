@@ -19,7 +19,7 @@ jobs:
           # - arm64
     runs-on: windows-2022
     env:
-      VSCODE_ARCH: ${{ matrix.arch }}
+      VSCODE_ARCH: ${{ matrix.vscode_arch }}
       npm_config_node_sqlite3_binary_host_mirror: https://registry.npmmirror.com/-/binary/sqlite3/
     steps:
       - name: Checkout builder
@@ -42,7 +42,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force signing_temp | Out-Null
           New-Item -ItemType Directory -Force signing_output | Out-Null
-          $mappingPath = "signing_temp\_mapping.txt"
+          New-Item -ItemType Directory -Force signing_meta | Out-Null
+          $mappingPath = "signing_meta\_mapping.txt"
           if (Test-Path $mappingPath) { Remove-Item $mappingPath -Force }
           $usedNames = @{}
           Get-ChildItem -Path assets -File -Include *.exe, *.msi -Recurse | ForEach-Object {
@@ -84,7 +85,7 @@ jobs:
       - name: Copy signed files back
         shell: pwsh
         run: |
-          $mappingPath = "signing_temp\_mapping.txt"
+          $mappingPath = "signing_meta\_mapping.txt"
           if (-not (Test-Path $mappingPath)) { throw "Mapping file not found: $mappingPath" }
           Get-Content $mappingPath | ForEach-Object {
             if ($_ -match '^\s*$') { return }
@@ -98,7 +99,7 @@ jobs:
               Write-Warning "Signed file missing: $asciiName"
             }
           }
-          Remove-Item -Recurse -Force signing_output, signing_temp
+          Remove-Item -Recurse -Force signing_output, signing_temp, signing_meta
 
       - name: Prepare checksums
         shell: bash
@@ -130,7 +131,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: yuejuan-windows-${{ matrix.arch }}
+          name: yuejuan-windows-${{ matrix.vscode_arch }}
           path: assets/
           retention-days: 7
 
