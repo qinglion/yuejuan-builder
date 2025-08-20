@@ -75,24 +75,12 @@ fi
 
 # Clean previous artifacts and build
 if exists yarn; then
-  # Rebuild native modules for electron 12
-  export npm_config_runtime=electron
-  export npm_config_target=12.2.3
-  export npm_config_disturl=https://electronjs.org/headers
-  if [[ "${VSCODE_ARCH}" == "arm64" ]]; then export npm_config_target_arch=arm64; else export npm_config_target_arch=x64; fi
-  (npm rebuild sqlite3 || true)
-  (npm rebuild nodejieba || true)
+  # Native modules are rebuilt during postinstall via electron-builder install-app-deps
   yarn run dist:clean || true
   yarn run build || true
   yarn run dist
 else
-  # Rebuild native modules for electron 12
-  export npm_config_runtime=electron
-  export npm_config_target=12.2.3
-  export npm_config_disturl=https://electronjs.org/headers
-  if [[ "${VSCODE_ARCH}" == "arm64" ]]; then export npm_config_target_arch=arm64; else export npm_config_target_arch=x64; fi
-  (npm rebuild sqlite3 || true)
-  (npm rebuild nodejieba || true)
+  # Native modules are rebuilt during postinstall via electron-builder install-app-deps
   npm run dist:clean || true
   npm run build || true
   npm run dist
