@@ -17,7 +17,7 @@ jobs:
         vscode_arch:
           - x64
           # - arm64
-    runs-on: windows-2022
+    runs-on: windows-2019
     env:
       VSCODE_ARCH: ${{ matrix.vscode_arch }}
       npm_config_node_sqlite3_binary_host_mirror: https://registry.npmmirror.com/-/binary/sqlite3/
@@ -29,6 +29,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '14'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Build and collect assets
         shell: bash
