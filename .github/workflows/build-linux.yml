@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  APP_NAME: Yuejuan
+  APP_NAME: 青狮阅卷
   APP_QUALITY: stable
   ASSETS_REPOSITORY: https://github.com/qinglion/yuejuan-binaries
   VERSIONS_REPOSITORY: https://github.com/qinglion/yuejuan-versions

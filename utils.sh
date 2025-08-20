@@ -3,7 +3,7 @@
 set -e
 
 # Default app variables (can be overridden by env)
-APP_NAME="${APP_NAME:-Yuejuan}"
+APP_NAME="${APP_NAME:-青狮阅卷}"
 APP_QUALITY="${APP_QUALITY:-stable}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-qinglion}"
 ASSETS_REPOSITORY="${ASSETS_REPOSITORY:-https://github.com/qinglion/yuejuan-binaries}"
