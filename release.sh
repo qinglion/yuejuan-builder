@@ -28,6 +28,19 @@ ensure_app_dir
 RELEASE_VERSION="${RELEASE_VERSION:-$( read_release_version )}"
 export RELEASE_VERSION
 
+# Default platform/arch if not provided (map utils.sh detection to expected values)
+if [[ -z "${VSCODE_PLATFORM}" ]]; then
+  case "$( detect_os_name )" in
+    osx) VSCODE_PLATFORM="darwin" ;;
+    windows) VSCODE_PLATFORM="win32" ;;
+    *) VSCODE_PLATFORM="linux" ;;
+  esac
+fi
+
+if [[ -z "${VSCODE_ARCH}" ]]; then
+  VSCODE_ARCH="$( detect_arch )"
+fi
+
 echo "RELEASE_VERSION=\"${RELEASE_VERSION}\""
 
 # Use app version string as BUILD_SOURCEVERSION fallback
@@ -44,6 +57,24 @@ export BUILD_SOURCEVERSION
 
 # Compute URL_BASE for assets (ASSETS_REPOSITORY is a fixed https repo URL)
 URL_BASE="${ASSETS_REPOSITORY%/}/releases/download/${RELEASE_VERSION}"
+
+pick_asset_basename() {
+  local pattern="$1"
+  local f
+  for f in ${pattern}; do
+    if [[ -e "${f}" ]]; then
+      basename "${f}"
+      return 0
+    fi
+  done
+  echo ""
+}
+
+# Ensure assets directory exists before proceeding
+if [[ ! -d "assets" ]]; then
+  echo "assets/ directory not found; skip updating versions"
+  exit 0
+fi
 
 generateJson() {
   local url name version productVersion sha1hash sha256hash timestamp oss_url
@@ -176,9 +207,9 @@ cd ..
 
 if [[ "${VSCODE_PLATFORM}" == "darwin" ]]; then
   # prefer zip; fallback dmg
-  ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*.zip 2>/dev/null | head -n1 | xargs -n1 basename || true )
+  ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.zip" )
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*.dmg 2>/dev/null | head -n1 | xargs -n1 basename || true )
+    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.dmg" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
     echo "No darwin asset found in assets/ for ${RELEASE_VERSION}"
@@ -188,9 +219,9 @@ if [[ "${VSCODE_PLATFORM}" == "darwin" ]]; then
   updateLatestVersion
 elif [[ "${VSCODE_PLATFORM}" == "win32" ]]; then
   # prefer system/user setup exe; fallback zip
-  ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*Setup*${VSCODE_ARCH}*.exe 2>/dev/null | head -n1 | xargs -n1 basename || true )
+  ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*Setup*${VSCODE_ARCH}*.exe" )
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*win32*${VSCODE_ARCH}*.zip 2>/dev/null | head -n1 | xargs -n1 basename || true )
+    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*win32*${VSCODE_ARCH}*.zip" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
     echo "No win32 asset found in assets/ for ${RELEASE_VERSION}"
@@ -200,15 +231,15 @@ elif [[ "${VSCODE_PLATFORM}" == "win32" ]]; then
   updateLatestVersion
 else
   # prefer tar.gz; fallback AppImage, deb, rpm (pick one)
-  ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*.tar.gz 2>/dev/null | head -n1 | xargs -n1 basename || true )
+  ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.tar.gz" )
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*.AppImage 2>/dev/null | head -n1 | xargs -n1 basename || true )
+    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.AppImage" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*.deb 2>/dev/null | head -n1 | xargs -n1 basename || true )
+    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.deb" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( ls assets/*"${RELEASE_VERSION}"*.rpm 2>/dev/null | head -n1 | xargs -n1 basename || true )
+    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.rpm" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
     echo "No linux asset found in assets/ for ${RELEASE_VERSION}"
