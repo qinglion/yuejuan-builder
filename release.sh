@@ -207,9 +207,9 @@ cd ..
 
 if [[ "${VSCODE_PLATFORM}" == "darwin" ]]; then
   # prefer zip; fallback dmg
-  ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.zip" )
+  ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.zip" )
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.dmg" )
+    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.dmg" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
     echo "No darwin asset found in assets/ for ${RELEASE_VERSION}"
@@ -219,9 +219,18 @@ if [[ "${VSCODE_PLATFORM}" == "darwin" ]]; then
   updateLatestVersion
 elif [[ "${VSCODE_PLATFORM}" == "win32" ]]; then
   # prefer system/user setup exe; fallback zip
-  ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*Setup*${VSCODE_ARCH}*.exe" )
+  # Try common naming: Setup-arch-version
+  ASSET_NAME=$( pick_asset_basename "assets/*Setup*${VSCODE_ARCH}*${RELEASE_VERSION}*.exe" )
+  # Try alternative order: version-Setup-arch
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*win32*${VSCODE_ARCH}*.zip" )
+    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*Setup*${VSCODE_ARCH}*.exe" )
+  fi
+  # Fallback zip patterns (two orders)
+  if [[ -z "${ASSET_NAME}" ]]; then
+    ASSET_NAME=$( pick_asset_basename "assets/*win32*${VSCODE_ARCH}*${RELEASE_VERSION}*.zip" )
+  fi
+  if [[ -z "${ASSET_NAME}" ]]; then
+    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*win32*${VSCODE_ARCH}*.zip" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
     echo "No win32 asset found in assets/ for ${RELEASE_VERSION}"
@@ -231,15 +240,15 @@ elif [[ "${VSCODE_PLATFORM}" == "win32" ]]; then
   updateLatestVersion
 else
   # prefer tar.gz; fallback AppImage, deb, rpm (pick one)
-  ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.tar.gz" )
+  ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.tar.gz" )
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.AppImage" )
+    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.AppImage" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.deb" )
+    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.deb" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( pick_asset_basename "assets/*\"${RELEASE_VERSION}\"*.rpm" )
+    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.rpm" )
   fi
   if [[ -z "${ASSET_NAME}" ]]; then
     echo "No linux asset found in assets/ for ${RELEASE_VERSION}"
