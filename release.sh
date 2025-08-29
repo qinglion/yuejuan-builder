@@ -219,25 +219,40 @@ if [[ "${VSCODE_PLATFORM}" == "darwin" ]]; then
   updateLatestVersion
 
 elif [[ "${VSCODE_PLATFORM}" == "win32" ]]; then
-  # prefer system/user setup exe; fallback zip
-  # Try common naming: Setup-arch-version
+  # Detect Windows asset and determine installation type
+  
+  # First try to find setup exe files
   ASSET_NAME=$( pick_asset_basename "assets/*Setup*${VSCODE_ARCH}*${RELEASE_VERSION}*.exe" )
-  # Try alternative order: version-Setup-arch
   if [[ -z "${ASSET_NAME}" ]]; then
     ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*Setup*${VSCODE_ARCH}*.exe" )
   fi
-  # Fallback zip patterns (two orders)
-  if [[ -z "${ASSET_NAME}" ]]; then
+  
+  # Determine target type based on filename patterns and package.json config
+  WIN_TARGET_TYPE="user"  # Default to user-level installation
+  
+  if [[ -n "${ASSET_NAME}" ]]; then
+    # Check if this is a setup exe - assume user-level installation per our config change
+    echo "Found Windows Setup exe: ${ASSET_NAME}"
+    WIN_TARGET_TYPE="user"
+  else
+    # Fallback to zip patterns (archive type)
     ASSET_NAME=$( pick_asset_basename "assets/*win32*${VSCODE_ARCH}*${RELEASE_VERSION}*.zip" )
+    if [[ -z "${ASSET_NAME}" ]]; then
+      ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*win32*${VSCODE_ARCH}*.zip" )
+    fi
+    if [[ -n "${ASSET_NAME}" ]]; then
+      echo "Found Windows archive: ${ASSET_NAME}"
+      WIN_TARGET_TYPE="archive"
+    fi
   fi
-  if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*win32*${VSCODE_ARCH}*.zip" )
-  fi
+  
   if [[ -z "${ASSET_NAME}" ]]; then
     echo "No win32 asset found in assets/ for ${RELEASE_VERSION}"
     exit 0
   fi
-  VERSION_PATH="${APP_QUALITY}/win32/${VSCODE_ARCH}/archive"
+  
+  VERSION_PATH="${APP_QUALITY}/win32/${VSCODE_ARCH}/${WIN_TARGET_TYPE}"
+  echo "Using Windows version path: ${VERSION_PATH}"
   updateLatestVersion
 else
   # prefer tar.gz; fallback AppImage, deb, rpm (pick one)
