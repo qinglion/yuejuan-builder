@@ -11,14 +11,20 @@ env:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        vscode_arch:
-          - x64
+    # strategy:
+      # fail-fast: false
+      # matrix:
+        # vscode_arch:
+          # - x64
           # - arm64
     # runs-on: windows-2022
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x64
     env:
       VSCODE_ARCH: ${{ matrix.vscode_arch }}
       npm_config_node_sqlite3_binary_host_mirror: https://registry.npmmirror.com/-/binary/sqlite3/
