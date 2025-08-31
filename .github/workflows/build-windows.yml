@@ -88,7 +88,7 @@ jobs:
           environment_name: PROD
           clean_logs: true
           jvm_max_memory: 1024M
-          signing_method: v1
+          signing_method: v2
 
       - name: Copy signed files back
         shell: pwsh
