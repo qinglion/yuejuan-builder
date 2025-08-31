@@ -42,6 +42,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
           # Force user-level installation for Windows
           NSIS_PER_MACHINE: false
+          OS_NAME: windows
         run: |
           bash build.sh
 
