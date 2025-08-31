@@ -82,13 +82,25 @@ fi
 
 # Build renderer css first
 if [[ -f package.json ]]; then
-  # Force native deps to build from source if prebuilt not available
-  export npm_config_build_from_source=true
+  # Force native deps to build from source on non-Windows only
+  if [[ "${OS_NAME}" != "windows" ]]; then
+    export npm_config_build_from_source=true
+  else
+    unset npm_config_build_from_source || true
+  fi
   if exists yarn; then
-    yarn install --network-timeout 600000
+    INSTALL_FLAGS="--network-timeout 600000"
+    if [[ "${OS_NAME}" == "windows" ]]; then
+      INSTALL_FLAGS+=" --ignore-optional"
+    fi
+    yarn install ${INSTALL_FLAGS}
     yarn run build:css
   else
-    npm install --network-timeout=600000
+    if [[ "${OS_NAME}" == "windows" ]]; then
+      npm install --no-optional --network-timeout=600000
+    else
+      npm install --network-timeout=600000
+    fi
     npm run build:css
   fi
 fi
