@@ -45,26 +45,6 @@ ensure_app_dir
 
 pushd "${APP_DIR}"
 
-# Apply configuration overrides for build customization
-if [[ -f package.json ]]; then
-  # Force user-level installation for Windows when NSIS_PER_MACHINE=false
-  if [[ "${NSIS_PER_MACHINE}" == "false" && "${OS_NAME}" == "windows" ]]; then
-    echo "Configuring user-level installation for Windows..."
-    if command -v jq >/dev/null 2>&1; then
-      # Use jq to update nsis.perMachine to false
-      jq '.build.nsis.perMachine = false' package.json > package.json.tmp && mv package.json.tmp package.json
-    else
-      # Fallback to sed for basic replacement
-      if is_gnu_sed; then
-        sed -i 's/"perMachine": true/"perMachine": false/g' package.json
-      else
-        sed -i '' 's/"perMachine": true/"perMachine": false/g' package.json
-      fi
-    fi
-    echo "Updated package.json for user-level installation"
-  fi
-fi
-
 # Node version for this project (fermium / 14.x)
 if exists nvm && [[ -f .nvmrc ]]; then
   nvm use || true
