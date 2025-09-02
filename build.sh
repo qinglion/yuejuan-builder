@@ -124,6 +124,14 @@ for f in "${APP_DIR}/build"/*.{dmg,zip,exe,blockmap,AppImage,deb,rpm}; do
 done
 shopt -u nullglob
 
+# Rename Chinese productName in asset filenames to ASCII alias for updater
+shopt -s nullglob
+for f in assets/*青狮阅卷*; do
+  new="${f//青狮阅卷/QingLion}"
+  mv -f "$f" "$new"
+done
+shopt -u nullglob
+
 # Set platform for downstream scripts
 case "${OS_NAME}" in
   osx)   export VSCODE_PLATFORM="darwin" ;;
