@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       quality:
-        description: 'Build quality: stable or insider'
-        required: false
-        default: 'stable'
+        description: 'Build quality'
+        required: true
+        type: choice
+        options:
+          - stable
+          - insider
+        default: stable
 
 env:
   APP_NAME: Yuejuan
-  APP_QUALITY: ${{ inputs.quality || 'stable' }}
+  APP_QUALITY: ${{ inputs.quality }}
   ASSETS_REPOSITORY: https://github.com/qinglion/yuejuan-binaries
   VERSIONS_REPOSITORY: https://github.com/qinglion/yuejuan-versions
 
