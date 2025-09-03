@@ -48,6 +48,8 @@ pushd "${APP_DIR}"
 # Inject build-time channel/arch into productService before building, then restore
 PRODUCT_FILE="src/main/ipc.js"
 RESTORE_NEEDED="no"
+PKG_FILE="package.json"
+RESTORE_PKG="no"
 if [[ -f "${PRODUCT_FILE}" ]]; then
   cp -f "${PRODUCT_FILE}" "${PRODUCT_FILE}.bak"
   RESTORE_NEEDED="yes"
@@ -61,10 +63,29 @@ if [[ -f "${PRODUCT_FILE}" ]]; then
   fi
 fi
 
+# For insider channel, mark productName in package.json for differentiation
+if [[ "${APP_QUALITY}" == "insider" && -f "${PKG_FILE}" ]]; then
+  cp -f "${PKG_FILE}" "${PKG_FILE}.bak"
+  RESTORE_PKG="yes"
+  node -e '
+    const fs = require("fs");
+    const f = "package.json";
+    const j = JSON.parse(fs.readFileSync(f, "utf8"));
+    const name = typeof j.productName === "string" ? j.productName : "";
+    if (!/内测/.test(name)) {
+      j.productName = name ? (name + " 内测") : "内测";
+      fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+    }
+  '
+fi
+
 # Ensure restore of ipc.js after build
 cleanup_product_file() {
   if [[ "${RESTORE_NEEDED}" == "yes" && -f "${PRODUCT_FILE}.bak" ]]; then
     mv -f "${PRODUCT_FILE}.bak" "${PRODUCT_FILE}"
+  fi
+  if [[ "${RESTORE_PKG}" == "yes" && -f "${PKG_FILE}.bak" ]]; then
+    mv -f "${PKG_FILE}.bak" "${PKG_FILE}"
   fi
 }
 trap cleanup_product_file EXIT
