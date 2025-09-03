@@ -1,11 +1,16 @@
 name: yuejuan-windows
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: 'Build quality: stable or insider'
+        required: false
+        default: 'stable'
 
 env:
   APP_NAME: Yuejuan
-  APP_QUALITY: stable
+  APP_QUALITY: ${{ inputs.quality || 'stable' }}
   ASSETS_REPOSITORY: https://github.com/qinglion/yuejuan-binaries
   VERSIONS_REPOSITORY: https://github.com/qinglion/yuejuan-versions
 

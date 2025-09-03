@@ -45,6 +45,30 @@ ensure_app_dir
 
 pushd "${APP_DIR}"
 
+# Inject build-time channel/arch into productService before building, then restore
+PRODUCT_FILE="src/main/ipc.js"
+RESTORE_NEEDED="no"
+if [[ -f "${PRODUCT_FILE}" ]]; then
+  cp -f "${PRODUCT_FILE}" "${PRODUCT_FILE}.bak"
+  RESTORE_NEEDED="yes"
+  # Replace quality
+  if [[ -n "${APP_QUALITY}" ]]; then
+    replace "s/(quality:\\s*)'[^']+'/\\1'${APP_QUALITY}'/" "${PRODUCT_FILE}"
+  fi
+  # Replace arch from VSCODE_ARCH if set
+  if [[ -n "${VSCODE_ARCH}" ]]; then
+    replace "s/(arch:\\s*)'[^']+'/\\1'${VSCODE_ARCH}'/" "${PRODUCT_FILE}"
+  fi
+fi
+
+# Ensure restore of ipc.js after build
+cleanup_product_file() {
+  if [[ "${RESTORE_NEEDED}" == "yes" && -f "${PRODUCT_FILE}.bak" ]]; then
+    mv -f "${PRODUCT_FILE}.bak" "${PRODUCT_FILE}"
+  fi
+}
+trap cleanup_product_file EXIT
+
 # Node version for this project (fermium / 14.x)
 if exists nvm && [[ -f .nvmrc ]]; then
   nvm use || true
