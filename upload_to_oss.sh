@@ -136,7 +136,7 @@ upload_to_oss() {
     inferred_version=$( echo "${file_name}" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?' | head -n1 || true )
     RELEASE_VERSION="${inferred_version}"
   fi
-  local oss_path="${APP_NAME}/${RELEASE_VERSION}/${platform}/${file_name}"
+  local oss_path="${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${file_name}"
   echo "Uploading ${file_name} -> oss://${OSS_BUCKET_NAME}/${oss_path}"
   for i in {1..3}; do
     if ossutil cp "${file_path}" "oss://${OSS_BUCKET_NAME}/${oss_path}" -f \
@@ -183,7 +183,7 @@ for file in *; do
       base_url="https://${OSS_BUCKET_NAME}.${OSS_ENDPOINT}"
     fi
     platform=$(get_platform)
-    echo "${base_url}/${APP_NAME}/${RELEASE_VERSION}/${platform}/${file}" > "../oss_urls/${file}.url"
+    echo "${base_url}/${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${file}" > "../oss_urls/${file}.url"
   fi
 done
 
