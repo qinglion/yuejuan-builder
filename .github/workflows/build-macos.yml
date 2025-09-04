@@ -10,7 +10,7 @@ on:
         options:
           - stable
           - insider
-        default: stable
+        default: insider
 
 env:
   APP_NAME: Yuejuan
