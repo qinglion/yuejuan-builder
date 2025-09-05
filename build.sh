@@ -45,32 +45,17 @@ ensure_app_dir
 
 pushd "${APP_DIR}"
 
-# Inject build-time channel/arch into productService before building, then restore
-PRODUCT_FILE="src/main/ipc.js"
-RESTORE_NEEDED="no"
-if [[ -f "${PRODUCT_FILE}" ]]; then
-  cp -f "${PRODUCT_FILE}" "${PRODUCT_FILE}.bak"
-  RESTORE_NEEDED="yes"
-  # Replace quality
-  if [[ -n "${APP_QUALITY}" ]]; then
-    replace "s/(quality:\\s*)'[^']+'/\\1'${APP_QUALITY}'/" "${PRODUCT_FILE}"
-  fi
-  # Replace arch from VSCODE_ARCH if set
-  if [[ -n "${VSCODE_ARCH}" ]]; then
-    replace "s/(arch:\\s*)'[^']+'/\\1'${VSCODE_ARCH}'/" "${PRODUCT_FILE}"
+# Inject build-time channel/arch into package.json build.extraMetadata, then restore
+PKG_FILE="package.json"
+RESTORE_PKG="no"
+if [[ -f "${PKG_FILE}" ]]; then
+  cp -f "${PKG_FILE}" "${PKG_FILE}.bak"
+  RESTORE_PKG="yes"
+  if command -v jq >/dev/null 2>&1; then
+    TMP_JSON="${PKG_FILE}.tmp"
+    jq '(.build //= {}) | (.build.extraMetadata //= {}) | (if env.APP_QUALITY then .build.extraMetadata.quality = env.APP_QUALITY else . end) | (if env.VSCODE_ARCH then .build.extraMetadata.arch = env.VSCODE_ARCH else . end)' "${PKG_FILE}" > "${TMP_JSON}" && mv -f "${TMP_JSON}" "${PKG_FILE}"
   fi
 fi
-
-# Ensure restore of ipc.js after build
-cleanup_product_file() {
-  if [[ "${RESTORE_NEEDED}" == "yes" && -f "${PRODUCT_FILE}.bak" ]]; then
-    mv -f "${PRODUCT_FILE}.bak" "${PRODUCT_FILE}"
-  fi
-  if [[ "${RESTORE_PKG}" == "yes" && -f "${PKG_FILE}.bak" ]]; then
-    mv -f "${PKG_FILE}.bak" "${PKG_FILE}"
-  fi
-}
-trap cleanup_product_file EXIT
 
 # Node version for this project (fermium / 14.x)
 if exists nvm && [[ -f .nvmrc ]]; then
