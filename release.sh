@@ -89,9 +89,9 @@ generateJson() {
 
   # Prefer CDN domain; else OSS bucket endpoint if configured; else GitHub Releases
   if [[ -n "${PUBLIC_DOWNLOAD_DOMAIN}" ]]; then
-    url="https://${PUBLIC_DOWNLOAD_DOMAIN}/${APP_NAME}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
+    url="https://${PUBLIC_DOWNLOAD_DOMAIN}/${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
   elif [[ -n "${OSS_BUCKET_NAME}" && -n "${OSS_ENDPOINT}" ]]; then
-    url="https://${OSS_BUCKET_NAME}.${OSS_ENDPOINT}/${APP_NAME}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
+    url="https://${OSS_BUCKET_NAME}.${OSS_ENDPOINT}/${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
   else
     url="${URL_BASE}/${ASSET_NAME}"
   fi
@@ -110,9 +110,9 @@ generateJson() {
   sha256hash=$( awk '{ print $1 }' "assets/${ASSET_NAME}.sha256" )
 
   if [[ -n "${PUBLIC_DOWNLOAD_DOMAIN}" ]]; then
-    oss_url="https://${PUBLIC_DOWNLOAD_DOMAIN}/${APP_NAME}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
+    oss_url="https://${PUBLIC_DOWNLOAD_DOMAIN}/${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
   else
-    oss_url="https://${OSS_BUCKET_NAME}.${OSS_ENDPOINT}/${APP_NAME}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
+    oss_url="https://${OSS_BUCKET_NAME}.${OSS_ENDPOINT}/${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${ASSET_NAME}"
   fi
 
   if [[ -n "${oss_url}" ]]; then
