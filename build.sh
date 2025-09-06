@@ -53,7 +53,7 @@ if [[ -f "${PKG_FILE}" ]]; then
   RESTORE_PKG="yes"
   if command -v jq >/dev/null 2>&1; then
     TMP_JSON="${PKG_FILE}.tmp"
-    jq '(.build //= {}) | (.build.extraMetadata //= {}) | (if env.APP_QUALITY then .build.extraMetadata.quality = env.APP_QUALITY else . end) | (if env.VSCODE_ARCH then .build.extraMetadata.arch = env.VSCODE_ARCH else . end)' "${PKG_FILE}" > "${TMP_JSON}" && mv -f "${TMP_JSON}" "${PKG_FILE}"
+    jq '(.product //= {}) | (if env.APP_QUALITY then .product.quality = env.APP_QUALITY else . end) | (if env.VSCODE_ARCH then .product.arch = env.VSCODE_ARCH else . end)' "${PKG_FILE}" > "${TMP_JSON}" && mv -f "${TMP_JSON}" "${PKG_FILE}"
   fi
 fi
 
