@@ -26,8 +26,8 @@ jobs:
         include:
           - runner: macos-13
             arch: x64
-          # - runner: macos-14
-          #   arch: arm64
+          - runner: macos-14
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     env:
       VSCODE_ARCH: ${{ matrix.arch }}
@@ -37,10 +37,19 @@ jobs:
       - name: Checkout builder
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 14 (fermium)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '14'
+      - name: Install Node.js 14 via nvm
+        shell: bash
+        run: |
+          export NVM_DIR="$HOME/.nvm"
+          mkdir -p "$NVM_DIR"
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+          . "$NVM_DIR/nvm.sh"
+          nvm install 14
+          nvm alias default 14
+          echo "NVM_DIR=$NVM_DIR" >> $GITHUB_ENV
+          echo "$NVM_DIR/versions/node/$(nvm version)/bin" >> $GITHUB_PATH
+          node -v
+          npm -v
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
