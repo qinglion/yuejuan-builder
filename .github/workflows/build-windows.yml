@@ -12,6 +12,8 @@ on:
           - insider
         default: insider
 
+run-name: yuejuan-windows (quality=${{ inputs.quality }})
+
 env:
   APP_NAME: Yuejuan
   APP_QUALITY: ${{ inputs.quality }}
