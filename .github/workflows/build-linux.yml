@@ -1,7 +1,13 @@
 name: yuejuan-linux
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Git branch to build'
+        required: false
+        type: string
+        default: master
 
 env:
   APP_NAME: Yuejuan
@@ -34,6 +40,7 @@ jobs:
       - name: Build and collect assets
         env:
           GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
+          APP_BRANCH: ${{ inputs.branch }}
         run: |
           bash build.sh
 
@@ -59,6 +66,7 @@ jobs:
           GITHUB_USERNAME: ${{ github.repository_owner }}
           PUBLIC_DOWNLOAD_DOMAIN: ${{ secrets.PUBLIC_DOWNLOAD_DOMAIN }}
           VSCODE_PLATFORM: linux
+          APP_BRANCH: ${{ inputs.branch }}
         run: bash release.sh
 
       - name: Upload artifacts

@@ -12,6 +12,8 @@ VERSIONS_REPOSITORY="${VERSIONS_REPOSITORY:-https://github.com/qinglion/yuejuan-
 # Upstream app repo and source path
 # APP_REPO accepts either full http(s) URL or "owner/repo" form
 APP_REPO="${APP_REPO:-https://github.com/haozan/qinglion_yuejuan}"
+# Preferred branch to checkout when cloning/updating the app repo
+APP_BRANCH="${APP_BRANCH:-master}"
 # Where the app source lives (always freshly cloned in CI unless explicitly provided)
 APP_DIR="${APP_DIR:-}"
 
@@ -23,6 +25,7 @@ echo "ASSETS_REPOSITORY=\"${ASSETS_REPOSITORY}\""
 echo "VERSIONS_REPOSITORY=\"${VERSIONS_REPOSITORY}\""
 echo "APP_REPO=\"${APP_REPO}\""
 echo "APP_DIR=\"${APP_DIR}\""
+echo "APP_BRANCH=\"${APP_BRANCH}\""
 
 exists() { type -t "$1" &> /dev/null; }
 
@@ -88,6 +91,7 @@ ensure_app_dir() {
   local dest
   local clone_url
   local token
+  local clone_branch_flag
 
   # derive dest dir from repo name
   if [[ "${repo}" == http://* || "${repo}" == https://* ]]; then
@@ -103,12 +107,17 @@ ensure_app_dir() {
     export APP_DIR
     # Optionally update when requested
     if [[ "${FORCE_UPDATE}" == "true" && -d "${dest}/.git" ]]; then
-      echo "Updating existing repo in ${dest}"
-      git -C "${dest}" fetch --depth=1 --tags || true
-      default_branch=$( git -C "${dest}" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's#^origin/##' || true )
-      if [[ -n "${default_branch}" ]]; then
-        git -C "${dest}" checkout -q "${default_branch}" || true
-        git -C "${dest}" pull --ff-only || true
+      echo "Updating existing repo in ${dest} (branch=${APP_BRANCH})"
+      # Fetch the requested branch and tags (depth=1 for speed)
+      git -C "${dest}" fetch --depth=1 origin "${APP_BRANCH}" --tags || true
+      # Determine target branch: prefer APP_BRANCH; else fall back to origin/HEAD
+      target_branch="${APP_BRANCH}"
+      if [[ -z "${target_branch}" ]]; then
+        target_branch=$( git -C "${dest}" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's#^origin/##' || true )
+      fi
+      if [[ -n "${target_branch}" ]]; then
+        git -C "${dest}" checkout -q "${target_branch}" || true
+        git -C "${dest}" pull --ff-only origin "${target_branch}" || true
       else
         git -C "${dest}" pull --ff-only || true
       fi
@@ -134,8 +143,14 @@ ensure_app_dir() {
     fi
   fi
 
-  echo "Cloning app repo: ${APP_REPO} -> ${dest}"
-  git clone --depth=1 "${clone_url}" "${dest}"
+  if [[ -n "${APP_BRANCH}" ]]; then
+    clone_branch_flag=( -b "${APP_BRANCH}" )
+  else
+    clone_branch_flag=()
+  fi
+
+  echo "Cloning app repo: ${APP_REPO} -> ${dest} (branch=${APP_BRANCH})"
+  git clone --depth=1 --single-branch "${clone_branch_flag[@]}" "${clone_url}" "${dest}"
 
   APP_DIR="${dest}"
   export APP_DIR

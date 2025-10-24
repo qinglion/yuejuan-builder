@@ -144,6 +144,47 @@ for f in assets/*青狮阅卷*; do
 done
 shopt -u nullglob
 
+# Append branch suffix to asset filenames (when not on master)
+SAFE_BRANCH="${APP_BRANCH:-}" 
+if [[ -n "${SAFE_BRANCH}" && "${SAFE_BRANCH}" != "master" ]]; then
+  # sanitize branch for filenames: replace non-alnum/._- with '-'
+  SAFE_BRANCH=$( echo "${SAFE_BRANCH}" | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//' )
+  if [[ -n "${SAFE_BRANCH}" ]]; then
+    shopt -s nullglob
+    for f in assets/*; do
+      # skip checksum files
+      [[ -f "$f" ]] || continue
+      case "$f" in
+        *.sha1|*.sha256) continue ;;
+      esac
+      dir="$( dirname "$f" )"
+      base="$( basename "$f" )"
+      # Avoid double-tagging
+      if [[ "$base" == *"-${SAFE_BRANCH}"* ]]; then
+        continue
+      fi
+      # Determine extension (handle .tar.gz and .blockmap specially)
+      ext=""
+      name_no_ext="$base"
+      if [[ "$base" == *.tar.gz ]]; then
+        ext=".tar.gz"
+        name_no_ext="${base%*.tar.gz}"
+      elif [[ "$base" == *.blockmap ]]; then
+        ext=".blockmap"
+        name_no_ext="${base%*.blockmap}"
+      else
+        if [[ "$base" == *.* ]]; then
+          ext=".${base##*.}"
+          name_no_ext="${base%.*}"
+        fi
+      fi
+      new_name="${name_no_ext}-${SAFE_BRANCH}${ext}"
+      mv -f "$f" "${dir}/${new_name}"
+    done
+    shopt -u nullglob
+  fi
+fi
+
 # Set platform for downstream scripts
 case "${OS_NAME}" in
   osx)   export VSCODE_PLATFORM="darwin" ;;

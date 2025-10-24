@@ -11,8 +11,13 @@ on:
           - stable
           - insider
         default: insider
+      branch:
+        description: 'Git branch to build'
+        required: false
+        type: string
+        default: master
 
-run-name: yuejuan-windows (quality=${{ inputs.quality }})
+run-name: yuejuan-windows (quality=${{ inputs.quality }}, branch=${{ inputs.branch }})
 
 env:
   APP_NAME: Yuejuan
@@ -51,6 +56,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
           OS_NAME: windows
+          APP_BRANCH: ${{ inputs.branch }}
         run: |
           bash build.sh
 
@@ -143,6 +149,7 @@ jobs:
           GITHUB_USERNAME: ${{ github.repository_owner }}
           PUBLIC_DOWNLOAD_DOMAIN: ${{ secrets.PUBLIC_DOWNLOAD_DOMAIN }}
           VSCODE_PLATFORM: win32
+          APP_BRANCH: ${{ inputs.branch }}
         run: bash release.sh
 
       - name: Upload artifacts
