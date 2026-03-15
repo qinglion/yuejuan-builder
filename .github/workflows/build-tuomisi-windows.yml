@@ -15,7 +15,7 @@ on:
         description: 'Git branch to build'
         required: false
         type: string
-        default: master
+        default: main
 
 run-name: tuomisi-windows (quality=${{ inputs.quality }}, branch=${{ inputs.branch }})
 
