@@ -1,0 +1,83 @@
+name: tuomisi-macos
+
+on:
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: 'Build quality'
+        required: true
+        type: choice
+        options:
+          - stable
+          - insider
+        default: stable
+      branch:
+        description: 'Git branch to build'
+        required: false
+        type: string
+        default: main
+
+run-name: tuomisi-macos (quality=${{ inputs.quality }}, branch=${{ inputs.branch }})
+
+env:
+  APP_NAME: Tuomisi
+  APP_QUALITY: ${{ inputs.quality }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      VSCODE_ARCH: ${{ matrix.arch }}
+      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build and collect assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
+          TUOMISI_REPO: ${{ secrets.TUOMISI_REPO }}
+          OS_NAME: osx
+          APP_BRANCH: ${{ inputs.branch }}
+          CERTIFICATE_OSX_P12_DATA: ${{ secrets.CERTIFICATE_OSX_P12_DATA }}
+          CERTIFICATE_OSX_P12_PASSWORD: ${{ secrets.CERTIFICATE_OSX_P12_PASSWORD }}
+        run: |
+          bash build-tuomisi.sh
+
+      - name: Prepare checksums
+        run: bash prepare_checksums.sh
+
+      - name: Upload to OSS
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_REGION: ${{ secrets.OSS_REGION }}
+          PUBLIC_DOWNLOAD_DOMAIN: ${{ secrets.PUBLIC_DOWNLOAD_DOMAIN }}
+          VSCODE_PLATFORM: darwin
+        run: bash upload_to_oss.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuomisi-macos-${{ matrix.arch }}
+          path: assets/
+          retention-days: 7

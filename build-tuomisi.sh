@@ -31,13 +31,22 @@ ensure_app_dir
 
 cd "$APP_DIR"
 
+# ── macOS code signing setup ───────────────────────────────────────────────────
+if [ "$OS_NAME" = "osx" ] && [ -n "${CERTIFICATE_OSX_P12_DATA:-}" ]; then
+  echo "--- macOS: setting up code signing ---"
+  CERT_TMP="$(mktemp /tmp/tuomisi-cert.XXXXXX.p12)"
+  echo "$CERTIFICATE_OSX_P12_DATA" | base64 --decode > "$CERT_TMP"
+  export CSC_LINK="$CERT_TMP"
+  export CSC_KEY_PASSWORD="${CERTIFICATE_OSX_P12_PASSWORD:-}"
+fi
+
 # ── 1. Build Python engine with PyInstaller (onedir mode) ──────────────────────
 echo "--- PyInstaller: installing deps ---"
 pip install --quiet --upgrade pyinstaller lxml mammoth
 
 echo "--- PyInstaller: building engine ---"
-# Outputs to python/dist/engine/ (onedir), matching extraResources config
-pyinstaller engine.spec --distpath python/dist --noconfirm
+# Outputs to dist/engine/ (onedir), matching electron-builder.yml extraResources
+pyinstaller engine.spec --distpath dist --noconfirm
 
 # ── 2. Install Node.js dependencies ───────────────────────────────────────────
 echo "--- npm install ---"
