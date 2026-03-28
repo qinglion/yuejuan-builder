@@ -38,6 +38,10 @@ if [ "$OS_NAME" = "osx" ] && [ -n "${CERTIFICATE_OSX_P12_DATA:-}" ]; then
   echo "$CERTIFICATE_OSX_P12_DATA" | base64 --decode > "$CERT_TMP"
   export CSC_LINK="$CERT_TMP"
   export CSC_KEY_PASSWORD="${CERTIFICATE_OSX_P12_PASSWORD:-}"
+  # Notarization credentials (electron-builder reads these directly)
+  export APPLE_ID="${APPLE_ID:-}"
+  export APPLE_APP_SPECIFIC_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD:-}"
+  export APPLE_TEAM_ID="${APPLE_TEAM_ID:-}"
 fi
 
 # ── 1. Build Python engine with PyInstaller (onedir mode) ──────────────────────

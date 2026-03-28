@@ -58,6 +58,9 @@ jobs:
           APP_BRANCH: ${{ inputs.branch }}
           CERTIFICATE_OSX_P12_DATA: ${{ secrets.CERTIFICATE_OSX_P12_DATA }}
           CERTIFICATE_OSX_P12_PASSWORD: ${{ secrets.CERTIFICATE_OSX_P12_PASSWORD }}
+          APPLE_ID: ${{ secrets.CERTIFICATE_OSX_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.CERTIFICATE_OSX_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.CERTIFICATE_OSX_TEAM_ID }}
         run: |
           bash build-tuomisi.sh
 
