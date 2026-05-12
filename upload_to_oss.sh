@@ -80,47 +80,94 @@ if [[ -z "${OSS_ACCESS_KEY_ID}" || -z "${OSS_ACCESS_KEY_SECRET}" || -z "${OSS_BU
 fi
 
 # Install ossutil 2.x if not present
+OSSUTIL_VERSION="2.1.2"
+OSSUTIL_BASE_URL="https://gosspublic.alicdn.com/ossutil/v2/${OSSUTIL_VERSION}"
+
+install_ossutil() {
+  local os="$1" arch="$2" zip_name="$3" extract_dir="$4" binary_name="$5"
+
+  echo "Downloading ossutil for ${os}/${arch}..."
+  if ! curl -fSL --connect-timeout 30 --retry 3 "${OSSUTIL_BASE_URL}/${zip_name}" -o ossutil.zip; then
+    echo "[ERROR] Failed to download ossutil from ${OSSUTIL_BASE_URL}/${zip_name}"
+    return 1
+  fi
+
+  if ! unzip -q ossutil.zip; then
+    echo "[ERROR] Failed to unzip ossutil.zip"
+    rm -f ossutil.zip
+    return 1
+  fi
+
+  if [[ ! -f "${extract_dir}/${binary_name}" ]]; then
+    echo "[ERROR] Expected binary not found: ${extract_dir}/${binary_name}"
+    rm -rf ossutil.zip "${extract_dir}"
+    return 1
+  fi
+
+  mkdir -p "./bin"
+  chmod 755 "${extract_dir}/${binary_name}" 2>/dev/null || true
+  mv "${extract_dir}/${binary_name}" "./bin/"
+  export PATH="$(pwd)/bin:$PATH"
+  rm -rf ossutil.zip "${extract_dir}"
+
+  # Verify installation
+  if ! command -v ossutil &> /dev/null; then
+    echo "[ERROR] ossutil installed to ./bin/ but not found in PATH"
+    return 1
+  fi
+
+  echo "ossutil installed successfully: $(ossutil --version 2>&1 || echo 'version check skipped')"
+  return 0
+}
+
 if ! command -v ossutil &> /dev/null; then
-  echo "Installing ossutil..."
+  echo "Installing ossutil v${OSSUTIL_VERSION}..."
   if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     if [[ "$(uname -m)" == "x86_64" ]]; then
-      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip -o ossutil.zip
-      unzip -q ossutil.zip
-      chmod 755 ossutil-v2.1.2-linux-amd64/ossutil
-      sudo mv ossutil-v2.1.2-linux-amd64/ossutil /usr/local/bin/
-      rm -rf ossutil.zip ossutil-v2.1.2-linux-amd64
+      install_ossutil "linux" "amd64" \
+        "ossutil-${OSSUTIL_VERSION}-linux-amd64.zip" \
+        "ossutil-v${OSSUTIL_VERSION}-linux-amd64" "ossutil" || exit 1
     else
-      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-arm64.zip -o ossutil.zip
-      unzip -q ossutil.zip
-      chmod 755 ossutil-2.1.2-linux-arm64/ossutil
-      sudo mv ossutil-2.1.2-linux-arm64/ossutil /usr/local/bin/
-      rm -rf ossutil.zip ossutil-2.1.2-linux-arm64
+      install_ossutil "linux" "arm64" \
+        "ossutil-${OSSUTIL_VERSION}-linux-arm64.zip" \
+        "ossutil-v${OSSUTIL_VERSION}-linux-arm64" "ossutil" || exit 1
     fi
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     if [[ "$(uname -m)" == "x86_64" ]]; then
-      # macOS Intel
-      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-amd64.zip -o ossutil.zip
-      unzip -q ossutil.zip
-      chmod 755 ossutil-2.1.2-mac-amd64/ossutil
-      sudo mv ossutil-2.1.2-mac-amd64/ossutil /usr/local/bin/
-      rm -rf ossutil.zip ossutil-2.1.2-mac-amd64
+      install_ossutil "mac" "amd64" \
+        "ossutil-${OSSUTIL_VERSION}-mac-amd64.zip" \
+        "ossutil-v${OSSUTIL_VERSION}-mac-amd64" "ossutil" || exit 1
     else
-      # macOS Apple Silicon
-      curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-arm64.zip -o ossutil.zip
-      unzip -q ossutil.zip
-      chmod 755 ossutil-2.1.2-mac-arm64/ossutil
-      sudo mv ossutil-2.1.2-mac-arm64/ossutil /usr/local/bin/
-      rm -rf ossutil.zip ossutil-2.1.2-mac-arm64
+      install_ossutil "mac" "arm64" \
+        "ossutil-${OSSUTIL_VERSION}-mac-arm64.zip" \
+        "ossutil-v${OSSUTIL_VERSION}-mac-arm64" "ossutil" || exit 1
     fi
-  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    curl -sL https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-windows-amd64-go1.20.zip -o ossutil.zip
-    unzip -q ossutil.zip
-    # Create local bin directory if it doesn't exist and move ossutil there
-    mkdir -p "./bin"
-    mv ossutil-2.1.2-windows-amd64-go1.20/ossutil.exe ./bin/
-    # Add local bin to PATH for current session
-    export PATH="$(pwd)/bin:$PATH"
-    rm -rf ossutil.zip ossutil-2.1.2-windows-amd64-go1.20
+  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
+    # Windows (Git Bash / MSYS2 / Cygwin)
+    if ! install_ossutil "windows" "amd64" \
+      "ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20.zip" \
+      "ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20" "ossutil.exe"; then
+      # Fallback: try PowerShell download
+      echo "Bash download failed, trying PowerShell fallback..."
+      pwsh -NoProfile -Command "
+        \$url = '${OSSUTIL_BASE_URL}/ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20.zip'
+        Write-Host \"Downloading \$url\"
+        Invoke-WebRequest -Uri \$url -OutFile ossutil.zip -ErrorAction Stop
+        Expand-Archive -Path ossutil.zip -DestinationPath . -Force
+        New-Item -ItemType Directory -Force ./bin | Out-Null
+        Move-Item -Force 'ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20/ossutil.exe' ./bin/
+        Remove-Item -Recurse -Force ossutil.zip, 'ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20'
+      " || { echo "[ERROR] PowerShell fallback also failed"; exit 1; }
+      export PATH="$(pwd)/bin:$PATH"
+      if ! command -v ossutil &> /dev/null; then
+        echo "[ERROR] ossutil still not found after PowerShell install"
+        exit 1
+      fi
+      echo "ossutil installed via PowerShell fallback"
+    fi
+  else
+    echo "[ERROR] Unsupported OS: ${OSTYPE}"
+    exit 1
   fi
 fi
 
