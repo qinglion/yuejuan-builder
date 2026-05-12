@@ -3,6 +3,9 @@
 
 set -e
 
+# === VERSION MARKER: 2026-05-12 fix-ossutil-windows ===
+echo "[upload_to_oss.sh] version: fix-ossutil-windows (2026-05-12)"
+
 # Try to load helpers first (for read_release_version, etc.)
 if [[ -f ./utils.sh ]]; then
   . ./utils.sh
