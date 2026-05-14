@@ -100,12 +100,17 @@ if [[ -f package.json ]]; then
     if [[ "${OS_NAME}" == "windows" ]]; then
       INSTALL_FLAGS+=" --ignore-optional"
     fi
+    # package-only runs on modern Node (>=20) where legacy fsevents@1 / nan
+    # fail to compile; skip optional deps since they're build-time only.
+    if [[ "${BUILD_STAGE}" == "package-only" ]]; then
+      INSTALL_FLAGS+=" --ignore-optional"
+    fi
     yarn install ${INSTALL_FLAGS}
     if [[ "${BUILD_STAGE}" != "package-only" ]]; then
       yarn run build:css
     fi
   else
-    if [[ "${OS_NAME}" == "windows" ]]; then
+    if [[ "${OS_NAME}" == "windows" || "${BUILD_STAGE}" == "package-only" ]]; then
       npm install --no-optional --network-timeout=600000
     else
       npm install --network-timeout=600000
