@@ -83,7 +83,7 @@ if [[ -z "${OSS_ACCESS_KEY_ID}" || -z "${OSS_ACCESS_KEY_SECRET}" || -z "${OSS_BU
 fi
 
 # Install ossutil 2.x if not present
-OSSUTIL_VERSION="2.1.2"
+OSSUTIL_VERSION="2.3.0"
 OSSUTIL_BASE_URL="https://gosspublic.alicdn.com/ossutil/v2/${OSSUTIL_VERSION}"
 
 install_ossutil() {
