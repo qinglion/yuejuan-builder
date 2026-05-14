@@ -9,10 +9,15 @@ OS_NAME="${OS_NAME:-$( detect_os_name )}"
 VSCODE_ARCH="${VSCODE_ARCH:-$( detect_arch )}"
 RELEASE_VERSION="${RELEASE_VERSION:-$( read_release_version )}"
 CI_BUILD="${CI_BUILD:-no}"
+# BUILD_STAGE: full (default) | renderer-only | package-only
+# - renderer-only: webpack 跑完即停（Node 14 兼容机器用）
+# - package-only:  跳过 webpack，需要先解压 RENDERER_DIST_TARBALL（现代 Node 机器用）
+BUILD_STAGE="${BUILD_STAGE:-full}"
 
-export OS_NAME VSCODE_ARCH RELEASE_VERSION CI_BUILD
+export OS_NAME VSCODE_ARCH RELEASE_VERSION CI_BUILD BUILD_STAGE
 
 echo "RELEASE_VERSION=\"${RELEASE_VERSION}\""
+echo "BUILD_STAGE=\"${BUILD_STAGE}\""
 
 # macOS: 仅收敛为四个核心变量，并做兼容映射
 if [[ "${OS_NAME}" == "osx" ]]; then
@@ -72,6 +77,16 @@ if command -v python3 >/dev/null 2>&1; then
   export npm_config_python="${PYTHON}"
 fi
 
+# Restore renderer-dist tarball (only in package-only mode)
+if [[ "${BUILD_STAGE}" == "package-only" ]]; then
+  if [[ -z "${RENDERER_DIST_TARBALL}" || ! -f "${RENDERER_DIST_TARBALL}" ]]; then
+    echo "[ERROR] BUILD_STAGE=package-only requires RENDERER_DIST_TARBALL pointing to an existing tarball"
+    exit 1
+  fi
+  echo "Extracting renderer-dist tarball: ${RENDERER_DIST_TARBALL}"
+  tar -xzf "${RENDERER_DIST_TARBALL}" -C .
+fi
+
 # Build renderer css first
 if [[ -f package.json ]]; then
   # Force native deps to build from source on non-Windows only
@@ -86,22 +101,49 @@ if [[ -f package.json ]]; then
       INSTALL_FLAGS+=" --ignore-optional"
     fi
     yarn install ${INSTALL_FLAGS}
-    yarn run build:css
+    if [[ "${BUILD_STAGE}" != "package-only" ]]; then
+      yarn run build:css
+    fi
   else
     if [[ "${OS_NAME}" == "windows" ]]; then
       npm install --no-optional --network-timeout=600000
     else
       npm install --network-timeout=600000
     fi
-    npm run build:css
+    if [[ "${BUILD_STAGE}" != "package-only" ]]; then
+      npm run build:css
+    fi
   fi
+fi
+
+# Stage A: renderer-only — run webpack and stop (no dist, no collect)
+if [[ "${BUILD_STAGE}" == "renderer-only" ]]; then
+  if exists yarn; then
+    yarn run build
+  else
+    npm run build
+  fi
+  popd
+
+  # Package renderer artifacts for downstream package-only jobs
+  TARBALL_OUT="${RENDERER_DIST_OUT:-./renderer-dist.tar.gz}"
+  echo "Packing renderer dist into ${TARBALL_OUT}"
+  tar -czf "${TARBALL_OUT}" \
+    -C "${APP_DIR}" \
+    dist/electron \
+    package.json \
+    static
+  echo "Renderer-only stage complete: ${TARBALL_OUT}"
+  exit 0
 fi
 
 # Clean previous artifacts and build
 if exists yarn; then
   # Native modules are rebuilt during postinstall via electron-builder install-app-deps
   yarn run dist:clean || true
-  yarn run build || true
+  if [[ "${BUILD_STAGE}" != "package-only" ]]; then
+    yarn run build || true
+  fi
   # Adjust dist command based on platform
   if [[ "${OS_NAME}" == "osx" ]]; then
     yarn run dist || yarn run build:mac || true
@@ -113,7 +155,9 @@ if exists yarn; then
 else
   # Native modules are rebuilt during postinstall via electron-builder install-app-deps
   npm run dist:clean || true
-  npm run build || true
+  if [[ "${BUILD_STAGE}" != "package-only" ]]; then
+    npm run build || true
+  fi
   # Adjust dist command based on platform
   if [[ "${OS_NAME}" == "osx" ]]; then
     npm run dist || npm run build:mac || true
