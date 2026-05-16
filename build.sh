@@ -89,12 +89,24 @@ fi
 
 # Build renderer css first
 if [[ -f package.json ]]; then
-  # Force native deps to build from source on non-Windows only
-  if [[ "${OS_NAME}" != "windows" ]]; then
+  # Force native deps to build from source on non-Windows only.
+  # Skip in package-only — node-sass postinstall would invoke node-gyp@3.8.0
+  # which uses Python 2 syntax and dies on Python 3-only runners.
+  if [[ "${OS_NAME}" != "windows" && "${BUILD_STAGE}" != "package-only" ]]; then
     export npm_config_build_from_source=true
   else
     unset npm_config_build_from_source || true
   fi
+
+  # package-only doesn't need node-sass (renderer is already built); strip it
+  # from package.json so yarn never tries to compile it. Restore on exit.
+  if [[ "${BUILD_STAGE}" == "package-only" && -f package.json ]]; then
+    cp -f package.json package.json.pkgonly.bak
+    [[ -f yarn.lock ]] && cp -f yarn.lock yarn.lock.pkgonly.bak
+    node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));['dependencies','devDependencies','optionalDependencies'].forEach(k=>{if(p[k]&&p[k]['node-sass'])delete p[k]['node-sass'];});fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+    trap 'mv -f package.json.pkgonly.bak package.json 2>/dev/null || true; [[ -f yarn.lock.pkgonly.bak ]] && mv -f yarn.lock.pkgonly.bak yarn.lock 2>/dev/null || true' EXIT
+  fi
+
   if exists yarn; then
     INSTALL_FLAGS="--network-timeout 600000"
     if [[ "${OS_NAME}" == "windows" ]]; then
