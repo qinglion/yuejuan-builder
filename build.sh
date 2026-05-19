@@ -160,33 +160,45 @@ if exists yarn; then
   if [[ "${BUILD_STAGE}" != "package-only" ]]; then
     yarn run build
   fi
-  # package-only must NOT fall back to build:mac — that re-runs webpack on Node 20 and fails
-  if [[ "${OS_NAME}" == "osx" ]]; then
-    if [[ "${BUILD_STAGE}" == "package-only" ]]; then
-      yarn run dist
+  # package-only: renderer already built, call electron-builder directly with explicit arch
+  if [[ "${BUILD_STAGE}" == "package-only" ]]; then
+    if [[ "${OS_NAME}" == "osx" ]]; then
+      npx electron-builder --mac --"${VSCODE_ARCH}"
+    elif [[ "${OS_NAME}" == "windows" ]]; then
+      npx electron-builder --win --"${VSCODE_ARCH}"
     else
-      yarn run dist || yarn run build:mac
+      npx electron-builder --linux --"${VSCODE_ARCH}"
     fi
-  elif [[ "${OS_NAME}" == "windows" ]]; then
-    yarn run dist:win || yarn run dist
   else
-    yarn run dist
+    if [[ "${OS_NAME}" == "osx" ]]; then
+      yarn run dist || yarn run build:mac
+    elif [[ "${OS_NAME}" == "windows" ]]; then
+      yarn run dist:win || yarn run dist
+    else
+      yarn run dist
+    fi
   fi
 else
   npm run dist:clean || true
   if [[ "${BUILD_STAGE}" != "package-only" ]]; then
     npm run build
   fi
-  if [[ "${OS_NAME}" == "osx" ]]; then
-    if [[ "${BUILD_STAGE}" == "package-only" ]]; then
-      npm run dist
+  if [[ "${BUILD_STAGE}" == "package-only" ]]; then
+    if [[ "${OS_NAME}" == "osx" ]]; then
+      npx electron-builder --mac --"${VSCODE_ARCH}"
+    elif [[ "${OS_NAME}" == "windows" ]]; then
+      npx electron-builder --win --"${VSCODE_ARCH}"
     else
-      npm run dist || npm run build:mac
+      npx electron-builder --linux --"${VSCODE_ARCH}"
     fi
-  elif [[ "${OS_NAME}" == "windows" ]]; then
-    npm run dist:win || npm run dist
   else
-    npm run dist
+    if [[ "${OS_NAME}" == "osx" ]]; then
+      npm run dist || npm run build:mac
+    elif [[ "${OS_NAME}" == "windows" ]]; then
+      npm run dist:win || npm run dist
+    else
+      npm run dist
+    fi
   fi
 fi
 
