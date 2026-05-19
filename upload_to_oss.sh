@@ -3,8 +3,8 @@
 
 set -e
 
-# === VERSION MARKER: 2026-05-19 fix-ossutil-extract-dir ===
-echo "[upload_to_oss.sh] version: fix-ossutil-extract-dir (2026-05-19)"
+# === VERSION MARKER: 2026-05-19 fix-ossutil-v230 ===
+echo "[upload_to_oss.sh] version: fix-ossutil-v230 (2026-05-19)"
 
 # Try to load helpers first (for read_release_version, etc.)
 if [[ -f ./utils.sh ]]; then
@@ -83,7 +83,7 @@ if [[ -z "${OSS_ACCESS_KEY_ID}" || -z "${OSS_ACCESS_KEY_SECRET}" || -z "${OSS_BU
 fi
 
 # Install ossutil 2.x if not present
-OSSUTIL_VERSION="2.2.1"
+OSSUTIL_VERSION="2.3.0"
 OSSUTIL_BASE_URL="https://gosspublic.alicdn.com/ossutil/v2/${OSSUTIL_VERSION}"
 
 install_ossutil() {
@@ -150,18 +150,18 @@ if ! command -v ossutil &> /dev/null; then
   elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
     # Windows (Git Bash / MSYS2 / Cygwin)
     if ! install_ossutil "windows" "amd64" \
-      "ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20.zip" \
-      "ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20" "ossutil.exe"; then
+      "ossutil-${OSSUTIL_VERSION}-windows-amd64.zip" \
+      "ossutil-${OSSUTIL_VERSION}-windows-amd64" "ossutil.exe"; then
       # Fallback: try PowerShell download
       echo "Bash download failed, trying PowerShell fallback..."
       pwsh -NoProfile -Command "
-        \$url = '${OSSUTIL_BASE_URL}/ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20.zip'
+        \$url = '${OSSUTIL_BASE_URL}/ossutil-${OSSUTIL_VERSION}-windows-amd64.zip'
         Write-Host \"Downloading \$url\"
         Invoke-WebRequest -Uri \$url -OutFile ossutil.zip -ErrorAction Stop
         Expand-Archive -Path ossutil.zip -DestinationPath . -Force
         New-Item -ItemType Directory -Force ./bin | Out-Null
-        Move-Item -Force 'ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20/ossutil.exe' ./bin/
-        Remove-Item -Recurse -Force ossutil.zip, 'ossutil-${OSSUTIL_VERSION}-windows-amd64-go1.20'
+        Move-Item -Force 'ossutil-${OSSUTIL_VERSION}-windows-amd64/ossutil.exe' ./bin/
+        Remove-Item -Recurse -Force ossutil.zip, 'ossutil-${OSSUTIL_VERSION}-windows-amd64'
       " || { echo "[ERROR] PowerShell fallback also failed"; exit 1; }
       export PATH="$(pwd)/bin:$PATH"
       if ! command -v ossutil &> /dev/null; then
