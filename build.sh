@@ -156,32 +156,37 @@ fi
 
 # Clean previous artifacts and build
 if exists yarn; then
-  # Native modules are rebuilt during postinstall via electron-builder install-app-deps
   yarn run dist:clean || true
   if [[ "${BUILD_STAGE}" != "package-only" ]]; then
-    yarn run build || true
+    yarn run build
   fi
-  # Adjust dist command based on platform
+  # package-only must NOT fall back to build:mac — that re-runs webpack on Node 20 and fails
   if [[ "${OS_NAME}" == "osx" ]]; then
-    yarn run dist || yarn run build:mac || true
+    if [[ "${BUILD_STAGE}" == "package-only" ]]; then
+      yarn run dist
+    else
+      yarn run dist || yarn run build:mac
+    fi
   elif [[ "${OS_NAME}" == "windows" ]]; then
-    yarn run dist:win || yarn run dist || true
+    yarn run dist:win || yarn run dist
   else
-    yarn run dist || true
+    yarn run dist
   fi
 else
-  # Native modules are rebuilt during postinstall via electron-builder install-app-deps
   npm run dist:clean || true
   if [[ "${BUILD_STAGE}" != "package-only" ]]; then
-    npm run build || true
+    npm run build
   fi
-  # Adjust dist command based on platform
   if [[ "${OS_NAME}" == "osx" ]]; then
-    npm run dist || npm run build:mac || true
+    if [[ "${BUILD_STAGE}" == "package-only" ]]; then
+      npm run dist
+    else
+      npm run dist || npm run build:mac
+    fi
   elif [[ "${OS_NAME}" == "windows" ]]; then
-    npm run dist:win || npm run dist || true
+    npm run dist:win || npm run dist
   else
-    npm run dist || true
+    npm run dist
   fi
 fi
 
@@ -196,6 +201,13 @@ for f in "${APP_DIR}/build"/*.{dmg,zip,exe,blockmap,AppImage,deb,rpm}; do
   cp -f "$f" assets/
 done
 shopt -u nullglob
+
+# Fail fast if no installable artifacts were collected
+asset_count=$(find assets/ -maxdepth 1 -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) | wc -l)
+if [[ "${asset_count}" -eq 0 ]]; then
+  echo "[ERROR] No artifacts found in assets/ — dist step likely failed. Aborting."
+  exit 1
+fi
 
 # Rename Chinese productName in asset filenames to ASCII alias for updater
 shopt -s nullglob
