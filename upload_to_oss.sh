@@ -3,8 +3,8 @@
 
 set -e
 
-# === VERSION MARKER: 2026-05-19 fix-ossutil-mac-arch ===
-echo "[upload_to_oss.sh] version: fix-ossutil-mac-arch (2026-05-19)"
+# === VERSION MARKER: 2026-05-19 fix-ossutil-extract-dir ===
+echo "[upload_to_oss.sh] version: fix-ossutil-extract-dir (2026-05-19)"
 
 # Try to load helpers first (for read_release_version, etc.)
 if [[ -f ./utils.sh ]]; then
@@ -83,7 +83,7 @@ if [[ -z "${OSS_ACCESS_KEY_ID}" || -z "${OSS_ACCESS_KEY_SECRET}" || -z "${OSS_BU
 fi
 
 # Install ossutil 2.x if not present
-OSSUTIL_VERSION="2.3.0"
+OSSUTIL_VERSION="2.2.1"
 OSSUTIL_BASE_URL="https://gosspublic.alicdn.com/ossutil/v2/${OSSUTIL_VERSION}"
 
 install_ossutil() {
@@ -129,11 +129,11 @@ if ! command -v ossutil &> /dev/null; then
     if [[ "$(uname -m)" == "x86_64" ]]; then
       install_ossutil "linux" "amd64" \
         "ossutil-${OSSUTIL_VERSION}-linux-amd64.zip" \
-        "ossutil-v${OSSUTIL_VERSION}-linux-amd64" "ossutil" || exit 1
+        "ossutil-${OSSUTIL_VERSION}-linux-amd64" "ossutil" || exit 1
     else
       install_ossutil "linux" "arm64" \
         "ossutil-${OSSUTIL_VERSION}-linux-arm64.zip" \
-        "ossutil-v${OSSUTIL_VERSION}-linux-arm64" "ossutil" || exit 1
+        "ossutil-${OSSUTIL_VERSION}-linux-arm64" "ossutil" || exit 1
     fi
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     # Prefer VSCODE_ARCH (set by CI) over uname -m to avoid Rosetta confusion
@@ -141,11 +141,11 @@ if ! command -v ossutil &> /dev/null; then
     if [[ "${_mac_arch}" == "x64" || "${_mac_arch}" == "x86_64" || "${_mac_arch}" == "amd64" ]]; then
       install_ossutil "mac" "amd64" \
         "ossutil-${OSSUTIL_VERSION}-mac-amd64.zip" \
-        "ossutil-v${OSSUTIL_VERSION}-mac-amd64" "ossutil" || exit 1
+        "ossutil-${OSSUTIL_VERSION}-mac-amd64" "ossutil" || exit 1
     else
       install_ossutil "mac" "arm64" \
         "ossutil-${OSSUTIL_VERSION}-mac-arm64.zip" \
-        "ossutil-v${OSSUTIL_VERSION}-mac-arm64" "ossutil" || exit 1
+        "ossutil-${OSSUTIL_VERSION}-mac-arm64" "ossutil" || exit 1
     fi
   elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
     # Windows (Git Bash / MSYS2 / Cygwin)
