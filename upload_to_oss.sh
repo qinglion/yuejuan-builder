@@ -3,8 +3,8 @@
 
 set -e
 
-# === VERSION MARKER: 2026-05-12 fix-ossutil-windows ===
-echo "[upload_to_oss.sh] version: fix-ossutil-windows (2026-05-12)"
+# === VERSION MARKER: 2026-05-19 fix-ossutil-mac-arch ===
+echo "[upload_to_oss.sh] version: fix-ossutil-mac-arch (2026-05-19)"
 
 # Try to load helpers first (for read_release_version, etc.)
 if [[ -f ./utils.sh ]]; then
@@ -136,7 +136,9 @@ if ! command -v ossutil &> /dev/null; then
         "ossutil-v${OSSUTIL_VERSION}-linux-arm64" "ossutil" || exit 1
     fi
   elif [[ "$OSTYPE" == "darwin"* ]]; then
-    if [[ "$(uname -m)" == "x86_64" ]]; then
+    # Prefer VSCODE_ARCH (set by CI) over uname -m to avoid Rosetta confusion
+    _mac_arch="${VSCODE_ARCH:-$(uname -m)}"
+    if [[ "${_mac_arch}" == "x64" || "${_mac_arch}" == "x86_64" || "${_mac_arch}" == "amd64" ]]; then
       install_ossutil "mac" "amd64" \
         "ossutil-${OSSUTIL_VERSION}-mac-amd64.zip" \
         "ossutil-v${OSSUTIL_VERSION}-mac-amd64" "ossutil" || exit 1
