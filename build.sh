@@ -118,6 +118,10 @@ if [[ -f package.json ]]; then
       INSTALL_FLAGS+=" --ignore-optional"
     fi
     yarn install ${INSTALL_FLAGS}
+    # dmg-license is optional but required for macOS .dmg packaging
+    if [[ "${BUILD_STAGE}" == "package-only" && "${OS_NAME}" == "osx" ]]; then
+      yarn add dmg-license --network-timeout 600000 2>/dev/null || true
+    fi
     if [[ "${BUILD_STAGE}" != "package-only" ]]; then
       yarn run build:css
     fi
@@ -126,6 +130,9 @@ if [[ -f package.json ]]; then
       npm install --no-optional --network-timeout=600000
     else
       npm install --network-timeout=600000
+    fi
+    if [[ "${BUILD_STAGE}" == "package-only" && "${OS_NAME}" == "osx" ]]; then
+      npm install dmg-license --network-timeout=600000 2>/dev/null || true
     fi
     if [[ "${BUILD_STAGE}" != "package-only" ]]; then
       npm run build:css
