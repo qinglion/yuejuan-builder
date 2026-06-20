@@ -46,7 +46,7 @@ fi
 
 # ── 1. Build Python engine with PyInstaller (onedir mode) ──────────────────────
 echo "--- PyInstaller: installing deps ---"
-pip install --quiet --upgrade pyinstaller lxml mammoth
+pip install --quiet --upgrade pyinstaller lxml mammoth onnxruntime numpy jieba
 
 echo "--- PyInstaller: building engine ---"
 # Outputs to dist/engine/ (onedir), matching electron-builder.yml extraResources
