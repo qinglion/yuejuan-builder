@@ -1,6 +1,6 @@
 # macOS arm64 双架构构建方案
 
-**Status**: Approved for implementation
+**Status**: Implemented and verified
 **Created**: 2026-05-14
 **Revised**: 2026-08-26
 **Owner**: 张润胜 / 大胜龙虾
@@ -28,13 +28,17 @@
 
 > ⚠️ Anti-pattern：不要在 package-only macOS 阶段单独安装依赖而丢失可选依赖排除策略，也不要为使 CI 变绿而给关键安装命令追加 `|| true`。
 
-## 2026-08-26 ARM64 验证进展与公证前置条件
+## 2026-08-26 ARM64 验证结果与公证前置条件
 
 运行 `#105` 在修复提交 `28b3bf2` 上已经越过 `#104` 的原生依赖失败：ARM64 job 保持 `nodejieba` 缺席、为 arm64 重建 `sqlite3`、下载 arm64 Electron，并成功生成和签名 `青狮阅卷Beta.app`。这证明原生 ARM64 构建链路已经打通。
 
-当前 ARM64 与 x64 job 随后都在 Apple `notarytool` 阶段收到同一个 HTTP 403：开发者团队存在尚未签署或已经过期的必需协议。这是 Apple 账户级外部前置条件，并非仓库代码、架构或签名凭据错误。
+ARM64 与 x64 job 随后都在 Apple `notarytool` 阶段收到同一个 HTTP 403：开发者团队存在尚未签署或已经过期的必需协议。这是 Apple 账户级外部前置条件，并非仓库代码、架构或签名凭据错误。
 
-团队 Account Holder 必须先在 Apple Developer / App Store Connect 接受待处理协议，然后从 `feat/macos-arm64-staged-build` 重新运行同一工作流。不得通过跳过公证来规避该前置条件，否则产物不满足现有 macOS 发布质量要求。
+团队 Account Holder 在 Apple Developer / App Store Connect 接受待处理协议后，运行 `#106` 在提交 `7cdca5a` 上完整成功：renderer、ARM64 和 x64 三个 job 均为 success；ARM64 产物完成签名、公证、checksums、OSS 上传、版本元数据更新和 GitHub artifact 上传。
+
+线上 `3.0.39` ARM64 ZIP 的 SHA-1/SHA-256 与 `latest.json` 一致；主程序和应用内 17 个 Mach-O 文件均为 arm64，`sqlite3` 原生模块为 arm64，`iconv-corefoundation` 为包含 arm64 的 universal binary。深度代码签名、Gatekeeper 和 stapled notarization ticket 均验证通过。
+
+后续若再次出现同类 Apple 协议 403，仍必须由 Account Holder 接受待处理协议，不得通过跳过公证来规避该前置条件，否则产物不满足现有 macOS 发布质量要求。
 
 ## 客户端协议确认
 
