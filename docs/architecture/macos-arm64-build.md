@@ -1,13 +1,30 @@
 # macOS arm64 双架构构建方案
 
-**Status**: Design
+**Status**: Approved for implementation
 **Created**: 2026-05-14
+**Revised**: 2026-08-26
 **Owner**: 张润胜 / 大胜龙虾
 
 ## 背景
 
 `yuejuan-macos` 工作流当前只产出 x64 包，Apple Silicon 用户跑 Rosetta 体验差。
 直接把工作流换成 `macos-14`（arm64 runner）跑不通，因为 Yuejuan 前端构建链锁死 Node 14（`node-sass ^4.0.0` + 一堆配套 webpack loader），而 Node 14 没有 Apple Silicon 官方二进制。
+
+## 实施边界
+
+- 所有设计、测试、修复提交和 GitHub Actions 验证都只在 `feat/macos-arm64-staged-build` 分支进行。
+- 不向 `main` 分支推送，不在本任务中合并分支。
+- 保留 x64 构建作为回归保护，同时新增并验证原生 arm64 构建。
+
+## 2026-08-26 失败根因
+
+运行 `#104` 在当前分支头 `cf73205` 上重新复现了失败：renderer 阶段成功，x64 与 arm64 都在 package 阶段失败。
+
+依赖安装最初会排除可选依赖，从而避开 `pinyin` 的可选原生加速模块 `nodejieba@2.5.2`。但后续为 DMG 打包补装许可证依赖时没有继续沿用这项约束，Yarn 因而重新安装了 `nodejieba`。Electron Builder 随后尝试为 Electron 12.2.3 重建它；上游没有对应的 macOS 预编译包，源码回退又与旧 Electron 头文件不兼容，最终报 `openssl_fips is not defined`。
+
+隔离依赖实验已确认：在补装 DMG 许可证依赖时继续排除可选依赖，可以安装 `dmg-license@1.0.11`，同时保持 `nodejieba` 缺席。
+
+修复原则：package 阶段的所有依赖安装都必须保持相同的可选依赖策略；关键安装失败必须直接终止，不能用错误吞噬制造假成功。
 
 ## 客户端协议确认
 
@@ -97,7 +114,7 @@ OSS 路径 `{APP_NAME}/{quality}/{version}/{platform}/{filename}` 中 filename �
 
 | # | 步骤 | 验证点 |
 |---|---|---|
-| 1 | 手动触发 yuejuan-macos，quality=insider, branch=master | 三个 job 顺序成功，总耗时 < 60 分钟 |
+| 1 | 从 `feat/macos-arm64-staged-build` 手动触发 yuejuan-macos，quality=insider, branch=master | 三个 job 顺序成功，总耗时 < 60 分钟 |
 | 2 | 下载 yuejuan-macos-arm64 artifact 在 M 系列 Mac 安装 | 启动正常，无 sqlite3 架构错误 |
 | 3 | 下载 yuejuan-macos-x64 artifact 在 Intel Mac 安装 | 与改造前行为一致 |
 | 4 | OSS `Yuejuan/insider/{version}/darwin/` 目录 | 同时存在 `*-x64.dmg/.zip` 和 `*-arm64.dmg/.zip`（含 sha1/sha256） |
@@ -110,3 +127,4 @@ OSS 路径 `{APP_NAME}/{quality}/{version}/{platform}/{filename}` 中 filename �
 - stable quality 推流（先 insider 跑稳）
 - 客户端 in-app updater 自动切换 arch（已支持，不用动）
 - `latest-mac.yml` 任何处理（协议不用，永久无视）
+- 向 `main` 推送或合并本分支
