@@ -26,6 +26,8 @@
 
 修复原则：package 阶段的所有依赖安装都必须保持相同的可选依赖策略；关键安装失败必须直接终止，不能用错误吞噬制造假成功。
 
+> ⚠️ Anti-pattern：不要在 package-only macOS 阶段单独安装依赖而丢失可选依赖排除策略，也不要为使 CI 变绿而给关键安装命令追加 `|| true`。
+
 ## 客户端协议确认
 
 通过阅读 `qinglion_yuejuan/src/main/update/updateService.darwin.js:17` 与运行日志 `logs/main.log:539` 确认：

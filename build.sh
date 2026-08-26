@@ -118,9 +118,10 @@ if [[ -f package.json ]]; then
       INSTALL_FLAGS+=" --ignore-optional"
     fi
     yarn install ${INSTALL_FLAGS}
-    # dmg-license is optional but required for macOS .dmg packaging
+    # dmg-license is optional to electron-builder but required for macOS .dmg packaging.
+    # Keep optional deps excluded so pinyin cannot reintroduce unsupported nodejieba.
     if [[ "${BUILD_STAGE}" == "package-only" && "${OS_NAME}" == "osx" ]]; then
-      yarn add dmg-license --network-timeout 600000 2>/dev/null || true
+      yarn add dmg-license --ignore-optional --network-timeout 600000
     fi
     if [[ "${BUILD_STAGE}" != "package-only" ]]; then
       yarn run build:css
@@ -132,7 +133,7 @@ if [[ -f package.json ]]; then
       npm install --network-timeout=600000
     fi
     if [[ "${BUILD_STAGE}" == "package-only" && "${OS_NAME}" == "osx" ]]; then
-      npm install dmg-license --network-timeout=600000 2>/dev/null || true
+      npm install dmg-license --omit=optional --network-timeout=600000
     fi
     if [[ "${BUILD_STAGE}" != "package-only" ]]; then
       npm run build:css
