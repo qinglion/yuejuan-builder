@@ -14,7 +14,7 @@ CI_BUILD="${CI_BUILD:-no}"
 # - package-only:  跳过 webpack，需要先解压 RENDERER_DIST_TARBALL（现代 Node 机器用）
 BUILD_STAGE="${BUILD_STAGE:-full}"
 
-export OS_NAME VSCODE_ARCH RELEASE_VERSION CI_BUILD BUILD_STAGE
+export OS_NAME VSCODE_ARCH RELEASE_VERSION CI_BUILD BUILD_STAGE APP_QUALITY
 
 echo "RELEASE_VERSION=\"${RELEASE_VERSION}\""
 echo "BUILD_STAGE=\"${BUILD_STAGE}\""
@@ -50,18 +50,6 @@ ensure_app_dir
 
 pushd "${APP_DIR}"
 
-# Inject build-time channel/arch into package.json build.extraMetadata, then restore
-PKG_FILE="package.json"
-RESTORE_PKG="no"
-if [[ -f "${PKG_FILE}" ]]; then
-  cp -f "${PKG_FILE}" "${PKG_FILE}.bak"
-  RESTORE_PKG="yes"
-  if command -v jq >/dev/null 2>&1; then
-    TMP_JSON="${PKG_FILE}.tmp"
-    jq '(.product //= {}) | (if env.APP_QUALITY then .product.quality = env.APP_QUALITY else . end) | (if env.VSCODE_ARCH then .product.arch = env.VSCODE_ARCH else . end) | (if (env.APP_QUALITY == "insider") then (.build //= {}) | (.build.productName = "青狮阅卷Beta") else . end)' "${PKG_FILE}" > "${TMP_JSON}" && mv -f "${TMP_JSON}" "${PKG_FILE}"
-  fi
-fi
-
 # Node version for this project (fermium / 14.x)
 if exists nvm && [[ -f .nvmrc ]]; then
   nvm use || true
@@ -86,6 +74,22 @@ if [[ "${BUILD_STAGE}" == "package-only" ]]; then
   echo "Extracting renderer-dist tarball: ${RENDERER_DIST_TARBALL}"
   tar -xzf "${RENDERER_DIST_TARBALL}" -C .
 fi
+
+# Apply metadata after extraction: the shared renderer tarball contains the
+# renderer runner's package.json (x64), not the current packaging target's arch.
+node <<'JS'
+const fs = require('fs')
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+pkg.product = {
+  ...pkg.product,
+  quality: process.env.APP_QUALITY,
+  arch: process.env.VSCODE_ARCH
+}
+if (process.env.APP_QUALITY === 'insider') {
+  pkg.build = { ...pkg.build, productName: '青狮阅卷Beta' }
+}
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
+JS
 
 # Build renderer css first
 if [[ -f package.json ]]; then

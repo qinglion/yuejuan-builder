@@ -1,8 +1,8 @@
 # macOS arm64 双架构构建方案
 
-**Status**: Implemented and verified
+**Status**: ARM64 构建已验证；2026-10-29 更新修复通过本地回归，待发布验证
 **Created**: 2026-05-14
-**Revised**: 2026-08-26
+**Revised**: 2026-10-29
 **Owner**: 张润胜 / 大胜龙虾
 
 ## 背景
@@ -42,14 +42,42 @@ ARM64 与 x64 job 随后都在 Apple `notarytool` 阶段收到同一个 HTTP 403
 
 ## 客户端协议确认
 
-通过阅读 `qinglion_yuejuan/src/main/update/updateService.darwin.js:17` 与运行日志 `logs/main.log:539` 确认：
+2026-10-29 重新核对客户端源码与发布日志，修正早期对架构来源的判断：
 
 - 客户端走自研 `latest.json` 协议（**不是** `electron-updater` 的 `latest-mac.yml`）
 - feedURL 拼接规则：`{updateUrl}/{quality}/darwin/{arch}/latest.json`
-- arch 取自 `process.arch`，arm64 用户访问的是 `darwin/arm64/latest.json`
+- 旧客户端实际使用 `productService.arch`，取自安装包的 `package.json`；日志中的 `process.arch` 只是运行时架构，不代表更新 URL 的架构。客户端修复后直接按 `process.arch` 构造更新 URL。
 - 两个 arch 路径完全分流，**没有合并 metadata 的需求**
 
 `build/latest-mac.yml` 是 electron-builder 自动生成的废产物，`build.sh` collect 阶段不收集，可继续无视。
+
+## 2026-10-29 更新回退到 Intel 的修复
+
+当天成功运行 `40816956181` 发布了 `3.0.40`。线上 `stable/darwin/arm64/latest.json` 和 `stable/darwin/x64/latest.json` 分别指向正确架构的 ZIP。
+
+已直接下载并检查线上 `QingLion-3.0.40-arm64.zip`：SHA-256 为 `19881a844e7670859b00d9775c29695d1168e1aeaead614a6c9e81d93ae02364`，与更新清单一致；主程序及 Helper 的 Mach-O CPU 类型为 ARM64，但 `Contents/Resources/app.asar` 中 `package.json` 的 `product.arch` 确实为 `x64`。
+
+真正的问题发生在打包阶段：`build.sh` 先注入 `product.arch=arm64`，随后解压 renderer artifact。该 artifact 包含 Intel renderer job 生成的 `package.json`，把架构重新覆盖为 `x64`。Electron 二进制仍然是 ARM64，但旧客户端会根据包内错误的 `product.arch` 请求 Intel 更新源。
+
+修复包括：
+
+- `build.sh` 在解压 artifact **之后**写入目标架构和渠道，使用已有的 Node 执行元数据写入。
+- 客户端 macOS 和 Windows 更新 URL 均使用 `process.arch`，避免陈旧的构建元数据决定更新架构。Rosetta 中运行的 x64 进程仍选择 x64 更新；不自动迁移架构。
+- `release.sh` 按完整版本、目标架构和可选分支后缀选择 macOS ZIP；缺少匹配 ZIP 时失败，不把另一架构或 DMG 写入更新清单。
+
+本地回归检查（隔离依赖安装、签名、网络和 Git 写操作）：
+
+```bash
+bash tests/test_macos_update_metadata.sh
+bash tests/test_macos_release_assets.sh
+bash tests/test_macos_package_only_optional_deps.sh
+# 在客户端仓库运行，无需安装依赖：
+npm run test:update
+```
+
+测试已复现修复前的错误并在修复后通过，覆盖两个渠道、两个架构、手动检查、自动更新网络回退、Windows 安装类型以及混合架构产物选择。尚未重新完成修复版本的签名、公证及端到端安装升级验证。
+
+上线时必须使用更高版本号；客户端不会下载同版本重打的包。已经回退成 Intel 版的 Apple Silicon 用户，需要手动安装一次修复后的 ARM64 版本，再验证后续更新保持 ARM64。
 
 ## 方案：3-job 拆分
 
@@ -101,14 +129,14 @@ Job A: prepare-renderer  (macos-13 + Node 14)
 - Job B：`runs-on: macos-13`，Node 20，`needs: prepare-renderer`，下载 artifact，跑 `BUILD_STAGE=package-only bash build.sh`，然后 checksums + OSS + release
 - Job C：与 Job B 同结构，`runs-on: macos-14`，`VSCODE_ARCH=arm64`，`npm_config_arch=arm64`
 
-### 4. `release.sh` — 不用改
+### 4. `release.sh` — 按架构选择 ZIP
 
 现有逻辑：
 - `VSCODE_ARCH` 已支持 `arm64`
 - `VERSION_PATH=${APP_QUALITY}/darwin/${VSCODE_ARCH}` 天然按 arch 分目录
 - `git push ... || { git pull; git push }` 已处理两个 job 并发 push 的冲突
 
-唯一一个潜在 bug（`ASSET_NAME` glob 不带 arch 过滤）在我们的拆分模型下不触发，因为 Job B/C 各自的 `assets/` 目录里只有自己 arch 的产物。**不修**。
+2026-10-29 已收紧 `ASSET_NAME` 匹配：必须同时符合版本、目标架构和分支后缀，且为 ZIP。即使多个架构的产物混放，也不能写出跨架构更新清单。
 
 ### 5. `upload_to_oss.sh` — 不用改
 
@@ -139,6 +167,6 @@ OSS 路径 `{APP_NAME}/{quality}/{version}/{platform}/{filename}` 中 filename �
 
 - Windows / Linux 工作流改造
 - stable quality 推流（先 insider 跑稳）
-- 客户端 in-app updater 自动切换 arch（已支持，不用动）
+- 客户端 in-app updater 自动迁移运行架构（本次修复保证运行架构与更新架构一致）
 - `latest-mac.yml` 任何处理（协议不用，永久无视）
 - 向 `main` 推送或合并本分支
