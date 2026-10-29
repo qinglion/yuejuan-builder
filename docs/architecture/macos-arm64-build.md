@@ -1,6 +1,6 @@
 # macOS arm64 双架构构建方案
 
-**Status**: 3.0.41 stable 双架构已发布，线上产物、架构、签名和公证验证通过
+**Status**: [3.1.0 stable](../releases/3.1.0-verification.md) 双架构已发布，线上产物、架构、签名和公证验证通过
 **Created**: 2026-05-14
 **Revised**: 2026-10-29
 **Owner**: 张润胜 / 大胜龙虾
