@@ -206,14 +206,19 @@ git remote add origin "${auth_url}" &> /dev/null
 cd ..
 
 if [[ "${VSCODE_PLATFORM}" == "darwin" ]]; then
-  # prefer zip; fallback dmg
-  ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.zip" )
-  if [[ -z "${ASSET_NAME}" ]]; then
-    ASSET_NAME=$( pick_asset_basename "assets/*${RELEASE_VERSION}*.dmg" )
+  # Squirrel.Mac updates require a ZIP for the exact version and target arch.
+  # Match the branch suffix added by build.sh without treating it as an arch.
+  branch_suffix=""
+  if [[ "${APP_BRANCH}" != "master" ]]; then
+    safe_branch=$( echo "${APP_BRANCH}" | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//' )
+    if [[ -n "${safe_branch}" ]]; then
+      branch_suffix="-${safe_branch}"
+    fi
   fi
+  ASSET_NAME=$( pick_asset_basename "assets/*-${RELEASE_VERSION}-${VSCODE_ARCH}${branch_suffix}.zip" )
   if [[ -z "${ASSET_NAME}" ]]; then
-    echo "No darwin asset found in assets/ for ${RELEASE_VERSION}"
-    exit 0
+    echo "[ERROR] No darwin update ZIP found in assets/ for ${RELEASE_VERSION}/${VSCODE_ARCH} (branch=${APP_BRANCH})" >&2
+    exit 1
   fi
   VERSION_PATH="${APP_QUALITY}/darwin/${VSCODE_ARCH}"
   updateLatestVersion
