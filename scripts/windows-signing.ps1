@@ -99,7 +99,7 @@ switch ($Mode) {
     New-Item -ItemType Directory -Path $stagingDirPath -Force | Out-Null
     New-Item -ItemType Directory -Path (Split-Path -Parent $mappingPathFull) -Force | Out-Null
 
-    $files = Get-SignableFiles -Root $sourceRootPath -AllowedExtensions $normalizedExtensions
+    $files = @(Get-SignableFiles -Root $sourceRootPath -AllowedExtensions $normalizedExtensions)
     if ($files.Count -eq 0) {
       throw "No signable files found in: $sourceRootPath"
     }
@@ -156,7 +156,7 @@ switch ($Mode) {
       Assert-ValidSignature -Path $destinationPath
     }
 
-    $allFiles = Get-SignableFiles -Root $sourceRootPath -AllowedExtensions $normalizedExtensions
+    $allFiles = @(Get-SignableFiles -Root $sourceRootPath -AllowedExtensions $normalizedExtensions)
     Assert-RootExecutable -Root $sourceRootPath -Files $allFiles
     if ($allFiles.Count -ne $entries.Count) {
       throw "Signable file count changed during signing: expected $($entries.Count), found $($allFiles.Count)"
@@ -165,7 +165,7 @@ switch ($Mode) {
   }
 
   'VerifyTree' {
-    $files = Get-SignableFiles -Root $sourceRootPath -AllowedExtensions $normalizedExtensions
+    $files = @(Get-SignableFiles -Root $sourceRootPath -AllowedExtensions $normalizedExtensions)
     if ($files.Count -eq 0) {
       throw "No signable files found in: $sourceRootPath"
     }
