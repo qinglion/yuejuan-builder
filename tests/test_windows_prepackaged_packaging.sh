@@ -17,7 +17,7 @@ cat > "${test_root}/bin/npx" <<'MOCK'
 set -euo pipefail
 expected="${PREPACKAGED_APP_DIR}"
 hook="${WINDOWS_SIGN_HOOK}"
-[[ "$*" == *"--no-install electron-builder --win nsis --x64 --prepackaged ${expected} --config.win.sign=${hook}"* ]]
+[[ "$*" == *"--no-install electron-builder --win nsis --x64 --prepackaged ${expected} --config.win.sign=${hook} --publish never"* ]]
 [[ ! -f build/stale-unsigned.exe ]]
 touch "build/青狮阅卷Setup-x64-3.1.1.exe"
 touch "build/青狮阅卷Setup-x64-3.1.1.exe.blockmap"

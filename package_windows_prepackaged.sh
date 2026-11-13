@@ -58,7 +58,8 @@ npx --no-install electron-builder \
   --win nsis \
   --"${VSCODE_ARCH}" \
   --prepackaged "${electron_prepackaged_dir}" \
-  --config.win.sign="${electron_sign_hook}"
+  --config.win.sign="${electron_sign_hook}" \
+  --publish never
 popd >/dev/null
 
 rm -rf assets
