@@ -9,7 +9,7 @@ trap 'rm -rf "${test_root}"' EXIT
 mkdir -p "${test_root}/tool/jar" "${test_root}/java/bin" "${test_root}/bin"
 touch "${test_root}/tool/jar/code_sign_tool-1.3.0.jar"
 touch "${test_root}/__uninstaller-nsis-com.qinglion.storm.exe"
-touch "${test_root}/QingLionSetup-x64-3.1.1.exe"
+touch "${test_root}/青狮阅卷Setup-x64-3.1.1.exe"
 
 cat > "${test_root}/java/bin/java.exe" <<'MOCK'
 #!/usr/bin/env bash
@@ -50,14 +50,14 @@ PATH="${test_root}/bin:${PATH}" \
   ES_TOTP_SECRET=fixture-totp \
   ESIGNER_AUDIT_LOG="${test_root}/audit.jsonl" \
   UNINSTALLER_PATH="${test_root}/__uninstaller-nsis-com.qinglion.storm.exe" \
-  INSTALLER_PATH="${test_root}/QingLionSetup-x64-3.1.1.exe" \
+  INSTALLER_PATH="${test_root}/青狮阅卷Setup-x64-3.1.1.exe" \
   node "${test_root}/run-hook.cjs"
 
 test "$(wc -l < "${test_root}/java-calls.log" | tr -d ' ')" -eq 2
 test "$(wc -l < "${test_root}/audit.jsonl" | tr -d ' ')" -eq 2
-rg -q -- '-input_file_path=.*/__uninstaller-nsis-com.qinglion.storm.exe' "${test_root}/java-calls.log"
-rg -q -- '-input_file_path=.*/QingLionSetup-x64-3.1.1.exe' "${test_root}/java-calls.log"
+test "$(rg -c -- '-input_file_path=.*/\.esigner-.*\.exe' "${test_root}/java-calls.log")" -eq 2
 rg -q '__uninstaller-nsis-com.qinglion.storm.exe' "${test_root}/audit.jsonl"
-rg -q 'QingLionSetup-x64-3.1.1.exe' "${test_root}/audit.jsonl"
+rg -q '青狮阅卷Setup-x64-3.1.1.exe' "${test_root}/audit.jsonl"
+test -z "$(find "${test_root}" -maxdepth 1 -name '.esigner-*' -print -quit)"
 
 echo 'PASS: eSigner hook serially signs and audits NSIS executables'

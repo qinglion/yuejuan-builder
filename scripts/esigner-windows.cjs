@@ -5,6 +5,7 @@ const path = require('path')
 const { spawn } = require('child_process')
 
 let signingQueue = Promise.resolve()
+let stagingCounter = 0
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -81,6 +82,13 @@ async function signOne(configuration) {
   const javaExecutable = javaHome
     ? path.join(javaHome, 'bin', 'java.exe')
     : 'java.exe'
+  const extension = path.extname(target) || '.exe'
+  const stagingPath = path.join(
+    path.dirname(target),
+    `.esigner-${process.pid}-${Date.now()}-${stagingCounter++}${extension}`
+  )
+  fs.copyFileSync(target, stagingPath)
+
   const javaArgs = [
     `-Xmx${process.env.ESIGNER_JVM_MAX_MEMORY || '1024M'}`,
     '-jar',
@@ -90,7 +98,7 @@ async function signOne(configuration) {
     `-password=${password}`,
     `-credential_id=${credentialId}`,
     `-totp_secret=${totpSecret}`,
-    `-input_file_path=${target}`,
+    `-input_file_path=${stagingPath}`,
     '-override=true',
     '-malware_block=true'
   ]
@@ -102,13 +110,18 @@ async function signOne(configuration) {
       env: process.env
     })
   } catch (error) {
+    fs.rmSync(stagingPath, { force: true })
     throw new Error(redact(error && error.message ? error.message : error, secrets))
   }
 
   const toolOutput = `${result.stdout}\n${result.stderr}`
   if (/(Error|Exception|Missing required option|Unmatched argument)/.test(toolOutput)) {
+    fs.rmSync(stagingPath, { force: true })
     throw new Error(redact(toolOutput, secrets))
   }
+
+  fs.copyFileSync(stagingPath, target)
+  fs.rmSync(stagingPath, { force: true })
 
   const verificationCommand = [
     "$ErrorActionPreference='Stop'",
