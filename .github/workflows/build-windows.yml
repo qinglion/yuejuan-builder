@@ -36,6 +36,10 @@ jobs:
     runs-on: windows-2022
     env:
       VSCODE_ARCH: ${{ matrix.vscode_arch }}
+      APP_DIR: qinglion_yuejuan
+      PREPACKAGED_APP_DIR: prepackaged/win-unpacked
+      WINDOWS_SIGN_HOOK: scripts/esigner-windows.cjs
+      ESIGNER_AUDIT_LOG: ${{ github.workspace }}/esigner-audit.jsonl
       npm_config_node_sqlite3_binary_host_mirror: https://registry.npmmirror.com/-/binary/sqlite3/
     steps:
       - name: Checkout builder
@@ -60,44 +64,26 @@ jobs:
         run: |
           bash build.sh
 
-      - name: Prepare files for signing
+      - name: Prepare application payload for signing
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force signing_temp | Out-Null
-          New-Item -ItemType Directory -Force signing_output | Out-Null
-          New-Item -ItemType Directory -Force signing_meta | Out-Null
-          $mappingPath = "signing_meta\_mapping.txt"
-          if (Test-Path $mappingPath) { Remove-Item $mappingPath -Force }
-          $usedNames = @{}
-          Get-ChildItem -Path assets -File -Include *.exe, *.msi -Recurse | ForEach-Object {
-            $origName = $_.Name
-            $chars = $origName.ToCharArray() | ForEach-Object {
-              if ([int][char]$_ -le 127) { $_ } else { '_' }
-            }
-            $asciiName = -join $chars
-            if ($asciiName -eq '') { $asciiName = 'file' }
-            $base = [System.IO.Path]::GetFileNameWithoutExtension($asciiName)
-            $ext = [System.IO.Path]::GetExtension($asciiName)
-            if ($usedNames.ContainsKey($asciiName)) {
-              $idx = ++$usedNames[$asciiName]
-              $asciiName = "$base-$idx$ext"
-            } else {
-              $usedNames[$asciiName] = 0
-            }
-            Copy-Item -LiteralPath $_.FullName -Destination ("signing_temp\" + $asciiName) -Force
-            "$asciiName|$origName" | Out-File -FilePath $mappingPath -Append -Encoding UTF8
-          }
+          ./scripts/windows-signing.ps1 `
+            -Mode Prepare `
+            -SourceRoot "$env:APP_DIR/build/win-unpacked" `
+            -StagingDir signing_app_input `
+            -MappingPath signing_app_mapping.json `
+            -Extensions @('.exe', '.dll')
 
-      - name: Code Signing with SSL.com
-        uses: sslcom/esigner-codesign@develop
+      - name: Sign application payload with SSL.com
+        uses: sslcom/esigner-codesign@b7f8ff36fc0de8690fbbab8e5b4421d29802f747
         with:
           command: batch_sign
           username: ${{ secrets.ES_USERNAME }}
           password: ${{ secrets.ES_PASSWORD }}
           credential_id: ${{ secrets.CREDENTIAL_ID }}
           totp_secret: ${{ secrets.ES_TOTP_SECRET }}
-          dir_path: ${{ github.workspace }}/signing_temp
-          output_path: ${{ github.workspace }}/signing_output
+          dir_path: ${{ github.workspace }}/signing_app_input
+          output_path: ${{ github.workspace }}/signing_app_output
           override: true
           malware_block: true
           environment_name: PROD
@@ -105,24 +91,63 @@ jobs:
           jvm_max_memory: 1024M
           signing_method: v1
 
-      - name: Copy signed files back
+      - name: Restore and verify signed application payload
         shell: pwsh
         run: |
-          $mappingPath = "signing_meta\_mapping.txt"
-          if (-not (Test-Path $mappingPath)) { throw "Mapping file not found: $mappingPath" }
-          Get-Content $mappingPath | ForEach-Object {
-            if ($_ -match '^\s*$') { return }
-            $parts = $_ -split '\|', 2
-            $asciiName = $parts[0]
-            $origName = $parts[1]
-            $signedPath = Join-Path "signing_output" $asciiName
-            if (Test-Path $signedPath) {
-              Move-Item -LiteralPath $signedPath -Destination (Join-Path "assets" $origName) -Force
-            } else {
-              Write-Warning "Signed file missing: $asciiName"
-            }
+          ./scripts/windows-signing.ps1 `
+            -Mode RestoreAndVerify `
+            -SourceRoot "$env:APP_DIR/build/win-unpacked" `
+            -SignedDir signing_app_output `
+            -MappingPath signing_app_mapping.json `
+            -Extensions @('.exe', '.dll')
+
+          $prepackagedParent = Split-Path -Parent $env:PREPACKAGED_APP_DIR
+          Remove-Item -LiteralPath $prepackagedParent -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $prepackagedParent -Force | Out-Null
+          Copy-Item -LiteralPath "$env:APP_DIR/build/win-unpacked" `
+            -Destination $prepackagedParent -Recurse -Force
+
+          ./scripts/windows-signing.ps1 `
+            -Mode VerifyTree `
+            -SourceRoot $env:PREPACKAGED_APP_DIR `
+            -Extensions @('.exe', '.dll')
+
+      - name: Package signed application
+        shell: bash
+        env:
+          APP_BRANCH: ${{ inputs.branch }}
+          ES_USERNAME: ${{ secrets.ES_USERNAME }}
+          ES_PASSWORD: ${{ secrets.ES_PASSWORD }}
+          CREDENTIAL_ID: ${{ secrets.CREDENTIAL_ID }}
+          ES_TOTP_SECRET: ${{ secrets.ES_TOTP_SECRET }}
+        run: bash package_windows_prepackaged.sh
+
+      - name: Verify signed uninstaller and installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath $env:ESIGNER_AUDIT_LOG -PathType Leaf)) {
+            throw "eSigner audit log is missing: $env:ESIGNER_AUDIT_LOG"
           }
-          Remove-Item -Recurse -Force signing_output, signing_temp, signing_meta
+          $audit = @(Get-Content -LiteralPath $env:ESIGNER_AUDIT_LOG | ForEach-Object {
+            if (-not [string]::IsNullOrWhiteSpace($_)) { $_ | ConvertFrom-Json }
+          })
+          $uninstallers = @($audit | Where-Object {
+            [System.IO.Path]::GetFileName($_.path) -like '__uninstaller-*.exe'
+          })
+          $installers = @($audit | Where-Object {
+            [System.IO.Path]::GetFileName($_.path) -like '*Setup*.exe'
+          })
+          if ($uninstallers.Count -eq 0) {
+            throw 'electron-builder did not sign and verify the NSIS uninstaller.'
+          }
+          if ($installers.Count -eq 0) {
+            throw 'electron-builder did not sign and verify the NSIS installer.'
+          }
+
+          ./scripts/windows-signing.ps1 `
+            -Mode VerifyTree `
+            -SourceRoot assets `
+            -Extensions @('.exe', '.msi')
 
       - name: Prepare checksums
         shell: bash
