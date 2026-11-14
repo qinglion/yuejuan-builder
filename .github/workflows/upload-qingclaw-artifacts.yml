@@ -1,0 +1,103 @@
+name: upload-qingclaw-artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Packaged QingClaw build version'
+        required: true
+        type: string
+      run_id:
+        description: 'Run ID holding the signed mac-arm64 and mac-x64 artifacts'
+        required: true
+        type: string
+      quality:
+        description: 'Distribution quality root'
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+        default: beta
+      channel:
+        description: 'electron-updater channel'
+        required: true
+        type: choice
+        options:
+          - nightly
+          - stable
+        default: nightly
+      publish:
+        description: 'Upload the retained artifacts to OSS'
+        required: true
+        type: boolean
+        default: true
+
+run-name: upload-qingclaw-artifacts (${{ inputs.version }}, ${{ inputs.quality }})
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  upload:
+    name: Upload retained macOS artifacts
+    runs-on: ubuntu-latest
+    concurrency:
+      group: qingclaw-artifact-upload-${{ inputs.quality }}-${{ inputs.channel }}
+      cancel-in-progress: false
+    env:
+      QINGCLAW_VERSION: ${{ inputs.version }}
+      QINGCLAW_QUALITY: ${{ inputs.quality }}
+      QINGCLAW_CHANNEL: ${{ inputs.channel }}
+      PUBLIC_DOWNLOAD_DOMAIN: d.qinglion.com
+      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
+      OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+      OSS_REGION: ${{ vars.QINGCLAW_OSS_REGION || 'oss-cn-hangzhou' }}
+    steps:
+      - name: Reject unsafe request
+        shell: bash
+        run: |
+          if [[ ! "${BUILD_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo 'run_id must be numeric' >&2
+            exit 1
+          fi
+        env:
+          BUILD_RUN_ID: ${{ inputs.run_id }}
+
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qingclaw-build-${{ inputs.version }}-mac-arm64
+          path: ${{ github.workspace }}/artifacts/arm64
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Download x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qingclaw-build-${{ inputs.version }}-mac-x64
+          path: ${{ github.workspace }}/artifacts/x64
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Upload arm64
+        if: ${{ inputs.publish }}
+        env:
+          QINGCLAW_ARCH: arm64
+          QINGCLAW_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/arm64
+          VSCODE_ARCH: arm64
+        run: bash "${GITHUB_WORKSPACE}/scripts/qingclaw/upload-desktop.sh"
+
+      - name: Upload x64
+        if: ${{ inputs.publish }}
+        env:
+          QINGCLAW_ARCH: x64
+          QINGCLAW_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/x64
+          VSCODE_ARCH: x64
+        run: bash "${GITHUB_WORKSPACE}/scripts/qingclaw/upload-desktop.sh"
