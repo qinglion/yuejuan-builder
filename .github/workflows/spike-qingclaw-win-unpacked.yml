@@ -1,0 +1,97 @@
+name: spike-qingclaw-win-unpacked
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Desktop build version'
+        required: true
+        type: string
+        default: 0.2.2-rc.3.20261114.1
+      dsh_ref:
+        description: 'qinglion/qingclaw-dsh ref'
+        required: true
+        type: string
+        default: codex/qingclaw-bootstrap
+
+run-name: spike-qingclaw-win-unpacked (${{ inputs.version }})
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-2022
+    env:
+      QINGCLAW_VERSION: ${{ inputs.version }}
+      QINGCLAW_DEPLOYMENT: test
+      QINGCLAW_CHANNEL: nightly
+      DSH_PACKAGING_PRESET: test
+      DSH_DESKTOP_UPDATE_CHANNEL: nightly
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Checkout QingClaw DSH
+        uses: actions/checkout@v4
+        with:
+          repository: qinglion/qingclaw-dsh
+          ref: ${{ inputs.dsh_ref }}
+          path: qingclaw-dsh
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.9.0'
+
+      - name: Activate pnpm 11.28.5
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.28.5 --activate
+
+      - name: Resolve test release ID
+        id: release
+        shell: bash
+        run: |
+          release_id="${{ vars.QINGCLAW_TEST_RELEASE_ID }}"
+          if [[ -z "${release_id}" ]]; then
+            release_id="$(printf '%s' "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${QINGCLAW_VERSION}" | sha256sum | cut -c1-32)"
+          fi
+          echo "id=${release_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare packaging configuration
+        env:
+          QINGCLAW_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          QINGCLAW_TEST_RELEASE_ID: ${{ steps.release.outputs.id }}
+          QINGCLAW_PUBLISH_ONLY: '1'
+        run: node scripts/qingclaw/write-packaging-config.mjs
+
+      - name: Install DSH dependencies
+        working-directory: qingclaw-dsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Build unsigned win-unpacked
+        working-directory: qingclaw-dsh
+        env:
+          DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+        run: >-
+          pnpm --filter @deepseek-ai/dsh-desktop run package:win:x64:dir --
+          --unsigned --build-version "${QINGCLAW_VERSION}"
+
+      - name: List output
+        shell: bash
+        run: |
+          find qingclaw-dsh/apps/desktop/.desktop-build/targets/win-x64 -maxdepth 3 -type f | head -100
+          echo '--- resources'
+          ls -la qingclaw-dsh/apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/win-unpacked/resources 2>/dev/null || true
+
+      - name: Upload unpacked app
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingclaw-win-unpacked
+          path: qingclaw-dsh/apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
