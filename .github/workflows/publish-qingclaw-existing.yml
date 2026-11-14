@@ -1,0 +1,189 @@
+name: qingclaw-publish-existing
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Full QingClaw build version already packaged'
+        required: true
+        type: string
+      deployment:
+        description: 'Update deployment'
+        required: true
+        type: choice
+        options:
+          - test
+          - production
+        default: test
+      channel:
+        description: 'electron-updater channel'
+        required: true
+        type: choice
+        options:
+          - nightly
+          - stable
+        default: nightly
+      dsh_ref:
+        description: 'qinglion/qingclaw-dsh branch, tag, or commit used for publication code'
+        required: true
+        type: string
+        default: codex/qingclaw-bootstrap
+      arm64_run_id:
+        description: 'Run ID holding the successful arm64 build artifact'
+        required: true
+        type: string
+      x64_run_id:
+        description: 'Run ID holding the successful x64 build artifact'
+        required: true
+        type: string
+      test_release_id:
+        description: 'Optional 32-char hex test deployment ID; generated from this run when blank'
+        required: false
+
+run-name: qingclaw-publish-existing (${{ inputs.version }}, ${{ inputs.deployment }})
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish:
+    name: Publish retained macOS build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: qingclaw-publish-${{ inputs.deployment }}-${{ inputs.channel }}
+      cancel-in-progress: false
+    env:
+      QINGCLAW_VERSION: ${{ inputs.version }}
+      QINGCLAW_DEPLOYMENT: ${{ inputs.deployment }}
+      QINGCLAW_CHANNEL: ${{ inputs.channel }}
+      DSH_PACKAGING_PRESET: ${{ inputs.deployment }}
+      DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.channel }}
+    steps:
+      - name: Reject unsafe release combinations
+        shell: bash
+        run: |
+          if [[ ! "${ARM64_RUN_ID}" =~ ^[0-9]+$ || ! "${X64_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo 'arm64_run_id and x64_run_id must be numeric GitHub run IDs' >&2
+            exit 1
+          fi
+          if [[ "${QINGCLAW_DEPLOYMENT}" == "production" && "${QINGCLAW_CHANNEL}" != "stable" ]]; then
+            echo 'Production releases must use the stable updater channel' >&2
+            exit 1
+          fi
+        env:
+          ARM64_RUN_ID: ${{ inputs.arm64_run_id }}
+          X64_RUN_ID: ${{ inputs.x64_run_id }}
+
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Checkout QingClaw DSH
+        uses: actions/checkout@v4
+        with:
+          repository: qinglion/qingclaw-dsh
+          ref: ${{ inputs.dsh_ref }}
+          path: qingclaw-dsh
+          token: ${{ inputs.deployment == 'production' && secrets.STRONGER_GITHUB_TOKEN || github.token }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate trusted DSH source
+        working-directory: qingclaw-dsh
+        shell: bash
+        run: |
+          trusted_ref='codex/qingclaw-bootstrap'
+          git fetch --no-tags origin "refs/heads/${trusted_ref}:refs/remotes/origin/${trusted_ref}"
+          if ! git merge-base --is-ancestor HEAD "origin/${trusted_ref}"; then
+            echo "Selected DSH ref is not part of ${trusted_ref}; refusing to expose release credentials" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.9.0'
+
+      - name: Activate pnpm 11.28.5
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.28.5 --activate
+
+      - name: Resolve test release ID
+        id: release
+        shell: bash
+        env:
+          REQUESTED_RELEASE_ID: ${{ inputs.test_release_id || vars.QINGCLAW_TEST_RELEASE_ID }}
+        run: |
+          if [[ "${QINGCLAW_DEPLOYMENT}" == "test" ]]; then
+            release_id="${REQUESTED_RELEASE_ID}"
+            if [[ -z "${release_id}" ]]; then
+              release_id="$(printf '%s' "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${QINGCLAW_VERSION}" | shasum -a 256 | cut -c1-32)"
+            fi
+            if [[ ! "${release_id}" =~ ^[a-f0-9]{32}$ ]]; then
+              echo 'test_release_id must contain 32 lowercase hexadecimal characters' >&2
+              exit 1
+            fi
+            echo "id=${release_id}" >> "${GITHUB_OUTPUT}"
+          else
+            echo 'id=' >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Prepare public publication configuration
+        env:
+          QINGCLAW_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          QINGCLAW_TEST_RELEASE_ID: ${{ steps.release.outputs.id }}
+          QINGCLAW_PUBLISH_ONLY: '1'
+        run: node scripts/qingclaw/write-packaging-config.mjs
+
+      - name: Install DSH dependencies
+        working-directory: qingclaw-dsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Download arm64 package
+        uses: actions/download-artifact@v4
+        with:
+          name: qingclaw-build-${{ inputs.version }}-mac-arm64
+          path: qingclaw-dsh/apps/desktop/.desktop-build/targets/mac-arm64/artifacts
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.arm64_run_id }}
+
+      - name: Download x64 package
+        uses: actions/download-artifact@v4
+        with:
+          name: qingclaw-build-${{ inputs.version }}-mac-x64
+          path: qingclaw-dsh/apps/desktop/.desktop-build/targets/mac-x64/artifacts
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.x64_run_id }}
+
+      - name: Publish both updater feeds and website installers
+        working-directory: qingclaw-dsh
+        env:
+          DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
+          OSS_REGION: ${{ vars.QINGCLAW_OSS_REGION || 'oss-cn-hangzhou' }}
+        run: >-
+          pnpm run publish:desktop:builder:release -- mac-arm64 mac-x64 --with-latest
+          --records-root "${RUNNER_TEMP}/qingclaw-publication"
+
+      - name: Upload publication evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingclaw-publication-${{ inputs.version }}
+          path: ${{ runner.temp }}/qingclaw-publication/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Remove publication configuration
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          config_dir="${RUNNER_TEMP}/qingclaw-packaging"
+          if [[ -z "${RUNNER_TEMP}" || "${config_dir}" != "${RUNNER_TEMP}/qingclaw-packaging" ]]; then
+            echo 'Refusing to remove an unresolved packaging directory' >&2
+            exit 1
+          fi
+          rm -rf -- "${config_dir}"
