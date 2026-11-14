@@ -86,7 +86,8 @@ jobs:
       - name: List output
         shell: bash
         run: |
-          find qingclaw-dsh/apps/desktop/.desktop-build/targets/win-x64 -maxdepth 3 -type f | head -100
+          find qingclaw-dsh/apps/desktop/.desktop-build/targets/win-x64 -maxdepth 3 -type f > "${RUNNER_TEMP}/win-files.txt"
+          sed -n '1,100p' "${RUNNER_TEMP}/win-files.txt"
           echo '--- resources'
           ls -la qingclaw-dsh/apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/win-unpacked/resources 2>/dev/null || true
 
