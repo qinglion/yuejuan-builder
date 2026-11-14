@@ -192,7 +192,7 @@ jobs:
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
           OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
-          OSS_REGION: ${{ vars.QINGCLAW_OSS_REGION || 'oss-cn-hangzhou' }}
+          OSS_REGION: ${{ secrets.OSS_REGION }}
           VSCODE_ARCH: ${{ matrix.arch }}
         run: bash "${GITHUB_WORKSPACE}/scripts/qingclaw/upload-desktop.sh"
 
