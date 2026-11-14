@@ -56,3 +56,31 @@ node --input-type=module -e '
     throw new Error("test policy did not round-trip through node:util.parseEnv")
   }
 ' "${config_root}/presets/test.env"
+
+signing_root="$(mktemp -d)"
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -subj '/CN=Developer ID Application: Example Co., Ltd. (ABCDEFGHIJ)' \
+  -keyout "${signing_root}/key.pem" -out "${signing_root}/cert.pem" -days 1 >/dev/null 2>&1
+openssl pkcs12 -export -out "${signing_root}/developer-id.p12" \
+  -inkey "${signing_root}/key.pem" -in "${signing_root}/cert.pem" \
+  -passout 'pass:test-pass#1' >/dev/null 2>&1
+certificate_data="$(base64 < "${signing_root}/developer-id.p12" | tr -d '\n')"
+QINGCLAW_CONFIG_DIR="${signing_root}/config" \
+QINGCLAW_DEPLOYMENT=production \
+CERTIFICATE_OSX_P12_DATA="${certificate_data}" \
+CERTIFICATE_OSX_P12_PASSWORD='test-pass#1' \
+CERTIFICATE_OSX_ID='builder@example.com' \
+CERTIFICATE_OSX_APP_PASSWORD='app-password' \
+CERTIFICATE_OSX_TEAM_ID=ABCDEFGHIJ \
+node "${config}" >/dev/null
+node --input-type=module -e '
+  import { readFile } from "node:fs/promises"
+  import { parseEnv } from "node:util"
+  const values = parseEnv(await readFile(process.argv[1], "utf8"))
+  if (values.DSH_DESKTOP_MACOS_SIGNING_IDENTITY !== "Example Co., Ltd. (ABCDEFGHIJ)") {
+    throw new Error("Developer ID common name punctuation did not round-trip")
+  }
+  if (values.CSC_KEY_PASSWORD !== "test-pass#1") {
+    throw new Error("signing password punctuation did not round-trip")
+  }
+' "${signing_root}/config/secrets/macos-signing.env"

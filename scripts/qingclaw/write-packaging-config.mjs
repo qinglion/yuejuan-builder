@@ -77,9 +77,13 @@ if (!publishOnly) {
     }
     const certificatePem = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/u)?.[0]
     if (!certificatePem) throw new Error('the P12 does not contain a readable signing certificate')
-    const commonName = new X509Certificate(certificatePem).subject.split('\n')
-      .find(value => value.startsWith('CN=Developer ID Application: '))
-    signingIdentity = commonName?.slice('CN=Developer ID Application: '.length)
+    // X509Certificate.subject is an RFC-style distinguished name and escapes
+    // punctuation (for example `Co.\, Ltd.`). codesign expects the literal
+    // common name, so read the structured legacy subject instead.
+    const commonName = new X509Certificate(certificatePem).toLegacyObject().subject.CN
+    signingIdentity = typeof commonName === 'string' && commonName.startsWith('Developer ID Application: ')
+      ? commonName.slice('Developer ID Application: '.length)
+      : undefined
     if (!signingIdentity) throw new Error('the P12 does not contain a Developer ID Application certificate')
   }
   if (!signingIdentity.endsWith(`(${teamId})`)) {
