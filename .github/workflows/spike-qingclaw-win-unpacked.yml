@@ -64,6 +64,7 @@ jobs:
       - name: Prepare packaging configuration
         env:
           QINGCLAW_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          QINGCLAW_PLATFORM: windows
           QINGCLAW_TEST_RELEASE_ID: ${{ steps.release.outputs.id }}
           QINGCLAW_PUBLISH_ONLY: '1'
         run: node scripts/qingclaw/write-packaging-config.mjs

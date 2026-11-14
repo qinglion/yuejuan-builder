@@ -40,15 +40,26 @@ const secrets = join(root, 'secrets')
 const certificates = join(root, 'certificates')
 await mkdir(presets, { recursive: true, mode: 0o700 })
 
+const platform = process.env.QINGCLAW_PLATFORM?.trim() || 'darwin'
+if (platform !== 'darwin' && platform !== 'windows') {
+  throw new Error('QINGCLAW_PLATFORM must be darwin or windows')
+}
+
+const macSettings = platform === 'darwin'
+  ? [
+      line('DSH_DESKTOP_MACOS_PACK_CONCURRENCY', '4'),
+      line('DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL', '3'),
+      line('DSH_DESKTOP_MACOS_DOWNLOAD_PROXY', ''),
+      line('DSH_DESKTOP_MACOS_NOTARIZATION_PROXY', ''),
+    ]
+  : []
+
 const common = [
   line('DSH_DESKTOP_APP_ID', deployment === 'test' ? 'com.qinglion.qingclaw.test' : 'com.qinglion.qingclaw'),
   line('DSH_DESKTOP_AUTO_UPDATE_ENV', deployment),
   line('DSH_DESKTOP_UPDATE_ROOT', deployment === 'test' ? 'qingclaw/beta/desktop' : 'qingclaw/stable/desktop'),
   line(deployment === 'test' ? 'DOWNLOAD_TEST_ORIGIN' : 'DOWNLOAD_PROD_ORIGIN', 'https://d.qinglion.com'),
-  line('DSH_DESKTOP_MACOS_PACK_CONCURRENCY', '4'),
-  line('DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL', '3'),
-  line('DSH_DESKTOP_MACOS_DOWNLOAD_PROXY', ''),
-  line('DSH_DESKTOP_MACOS_NOTARIZATION_PROXY', ''),
+  ...macSettings,
 ]
 const preset = deployment === 'test'
   ? [...common,
