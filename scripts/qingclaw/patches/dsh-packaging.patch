@@ -1,37 +1,43 @@
 diff --git a/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts b/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
-index fcf0bc633d..b2cb837146 100644
+index c58df5a048..b11c372e91 100644
 --- a/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
 +++ b/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
 @@ -1,6 +1,9 @@
  /** Environment variable that selects the Desktop update deployment. */
  export const DESKTOP_AUTO_UPDATE_ENV: 'DSH_DESKTOP_AUTO_UPDATE_ENV'
  
-+/** Optional stable object prefix that replaces the release-ID feed layout. */
-+export const DESKTOP_UPDATE_ROOT_ENV: 'DSH_DESKTOP_UPDATE_ROOT'
++/** Stable QingClaw object-store root for every Desktop update deployment. */
++export const DESKTOP_UPDATE_ROOT: 'qingclaw-desktop'
 +
- /** Stable QingClaw artifact prefix shared by retained releases and the publisher. */
- export const DESKTOP_ARTIFACT_PREFIX: 'qingclaw'
+ /** Supported Desktop update deployment. */
+ export type DesktopAutoUpdateEnvironment = 'test' | 'production'
  
 diff --git a/apps/desktop-publisher/src/desktop-auto-update-environment.mjs b/apps/desktop-publisher/src/desktop-auto-update-environment.mjs
-index 8b57a6c13d..89f544df7e 100644
+index 24aaa0ea2c..5c41f0b712 100644
 --- a/apps/desktop-publisher/src/desktop-auto-update-environment.mjs
 +++ b/apps/desktop-publisher/src/desktop-auto-update-environment.mjs
-@@ -5,6 +5,14 @@ import { valid } from 'semver'
+@@ -5,6 +5,9 @@ import { valid } from 'semver'
  /** Environment variable that selects the Desktop update deployment. */
  export const DESKTOP_AUTO_UPDATE_ENV = 'DSH_DESKTOP_AUTO_UPDATE_ENV'
  
-+/**
-+ * Optional stable object prefix that replaces the release-ID feed layout. A
-+ * distribution that publishes one continuously updated beta or stable channel
-+ * sets this so the packaged app, the publisher, and the website read the same
-+ * fixed feed directory.
-+ */
-+export const DESKTOP_UPDATE_ROOT_ENV = 'DSH_DESKTOP_UPDATE_ROOT'
++/** Stable QingClaw object-store root for every Desktop update deployment. */
++export const DESKTOP_UPDATE_ROOT = 'qingclaw-desktop'
 +
- /** Stable QingClaw artifact prefix shared by retained releases and the publisher. */
- export const DESKTOP_ARTIFACT_PREFIX = 'qingclaw'
- 
-@@ -160,6 +168,21 @@ function httpsOrigin(value, name) {
+ /**
+  * Resolve the channel embedded in the installer; omitted local settings retain nightly.
+  * @param {NodeJS.ProcessEnv} env Packaging or upload settings.
+@@ -25,8 +28,8 @@ const UPDATE_ENVIRONMENTS = {
+     secretKeyEnvName: 'DOWNLOAD_TEST_COS_SECRET_KEY',
+   },
+   production: {
+-    originEnvName: undefined,
+-    fixedOrigin: 'https://download.deepseek.com',
++    originEnvName: 'DOWNLOAD_PROD_ORIGIN',
++    fixedOrigin: undefined,
+     bucketEnvName: 'DOWNLOAD_PROD_COS_BUCKET',
+     secretIdEnvName: 'DOWNLOAD_PROD_COS_SECRET_ID',
+     secretKeyEnvName: 'DOWNLOAD_PROD_COS_SECRET_KEY',
+@@ -152,6 +155,21 @@ function httpsOrigin(value, name) {
    return parsed.origin
  }
  
@@ -42,10 +48,10 @@ index 8b57a6c13d..89f544df7e 100644
 + * @throws {Error} When the value is not a safe object path.
 + */
 +function resolveStableUpdateRoot(env) {
-+  const value = env[DESKTOP_UPDATE_ROOT_ENV]?.trim()
++  const value = env.DSH_DESKTOP_UPDATE_ROOT?.trim()
 +  if (value === undefined || value === '') return undefined
 +  if (!/^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u.test(value)) {
-+    throw new Error(`desktop auto-update: ${DESKTOP_UPDATE_ROOT_ENV} must be lowercase object path segments`)
++    throw new Error('desktop auto-update: DSH_DESKTOP_UPDATE_ROOT must be lowercase object path segments')
 +  }
 +  return value
 +}
@@ -53,13 +59,15 @@ index 8b57a6c13d..89f544df7e 100644
  /**
   * Resolve the public updater URL and object prefixes for one release target.
   * @param {NodeJS.ProcessEnv} env - Packaging or upload environment.
-@@ -175,6 +198,19 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
+@@ -165,13 +183,28 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
+   const environment = resolveDesktopAutoUpdateEnvironment(env)
+   const target = resolveDesktopAutoUpdateTarget(platform, arch)
    const deployment = UPDATE_ENVIRONMENTS[environment]
-   const { originEnvName } = deployment
-   const origin = httpsOrigin(requiredEnvironmentValue(env, originEnvName), originEnvName)
 +  const stableRoot = resolveStableUpdateRoot(env)
 +  if (stableRoot !== undefined) {
-+    const keyPrefix = `${stableRoot}/${target === 'mac-arm64' ? 'arm64' : target === 'mac-x64' ? 'x64' : 'x64'}`
++    const archDir = target === 'mac-arm64' ? 'arm64' : 'x64'
++    const keyPrefix = `${stableRoot}/${archDir}`
++    const origin = httpsOrigin(requiredEnvironmentValue(env, deployment.originEnvName), deployment.originEnvName)
 +    return {
 +      environment,
 +      channel,
@@ -70,59 +78,45 @@ index 8b57a6c13d..89f544df7e 100644
 +      publicUrl: `${origin}/${keyPrefix}/`,
 +    }
 +  }
-   let releasePrefix = DESKTOP_UPDATE_ROOT
+   let origin = deployment.fixedOrigin
+   if (origin === undefined) {
+     const { originEnvName } = deployment
+     if (originEnvName === undefined) throw new Error('desktop auto-update: selected deployment has no origin')
+     origin = httpsOrigin(requiredEnvironmentValue(env, originEnvName), originEnvName)
+   }
+-  let releasePrefix = 'dsh-desk'
++  let releasePrefix = DESKTOP_UPDATE_ROOT
    if (environment === 'test') {
      const releaseId = requiredEnvironmentValue(env, 'DOWNLOAD_TEST_RELEASE_ID')
-diff --git a/apps/desktop/scripts/desktop-package-environment.d.mts b/apps/desktop/scripts/desktop-package-environment.d.mts
-index ec9da721f1..debfb6293e 100644
---- a/apps/desktop/scripts/desktop-package-environment.d.mts
-+++ b/apps/desktop/scripts/desktop-package-environment.d.mts
-@@ -23,7 +23,7 @@ export function loadDesktopPackageEnvironment(
-   platform: 'win32' | 'darwin',
-   environment?: NodeJS.ProcessEnv,
-   appRoot?: string,
--  options?: { unsigned?: boolean, prepareOnly?: boolean },
-+  options?: { unsigned?: boolean, prepareOnly?: boolean, publishOnly?: boolean },
- ): NodeJS.ProcessEnv
- 
- /**
+     if (!/^[a-f0-9]{32}$/u.test(releaseId)) {
 diff --git a/apps/desktop/scripts/desktop-package-environment.mjs b/apps/desktop/scripts/desktop-package-environment.mjs
-index 91d53a4a07..762ca3a8e0 100644
+index d301ac4b31..52b8adc2ec 100644
 --- a/apps/desktop/scripts/desktop-package-environment.mjs
 +++ b/apps/desktop/scripts/desktop-package-environment.mjs
-@@ -16,7 +16,7 @@ import { resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
- import { QINGCLAW_DISTRIBUTION } from '../../../distribution/qingclaw.mjs'
+@@ -15,10 +15,10 @@ import { resolveWindowsPackageSettings } from './windows-package-settings.mjs'
+ import { resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
  
  const APP_ROOT = fileURLToPath(new URL('..', import.meta.url))
 -const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_RELEASE_ID|DOWNLOAD_PROD_EO_ZONE_ID|DOWNLOAD_(?:TEST|PROD)_(?:ORIGIN|COS_BUCKET|COS_SECRET_ID|COS_SECRET_KEY))$/u
 +const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_RELEASE_ID|DOWNLOAD_PROD_EO_ZONE_ID|DOWNLOAD_(?:TEST|PROD)_(?:ORIGIN|COS_BUCKET|COS_SECRET_ID|COS_SECRET_KEY))$/u
  const WINDOWS_SETTING = /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN|SIGNATURE_CACHE_DIR|SIGNATURE_CACHE_CONCURRENCY|PACK_CONCURRENCY|COMPRESSION_LEVEL)$/u
  const MACOS_SETTING = /^(?:DSH_DESKTOP_MACOS_(?:SIGNING_IDENTITY|TEAM_ID|SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)|APPLE_(?:API_KEY|API_KEY_ID|API_ISSUER|ID|APP_SPECIFIC_PASSWORD|TEAM_ID|KEYCHAIN|KEYCHAIN_PROFILE)|CSC_(?:LINK|KEY_PASSWORD))$/u
- const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
-@@ -43,7 +43,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
-  * @param {'win32' | 'darwin'} platform Target platform.
-  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
-  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
-- * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Unsigned presets and Windows preparation-only presets never read signing credentials.
-+ * @param {{ unsigned?: boolean, prepareOnly?: boolean, publishOnly?: boolean }} options Unsigned, Windows preparation-only, and publication-only readers never read signing credentials.
-  * @returns {NodeJS.ProcessEnv} Isolated environment with file-owned release settings.
-  */
- export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT, options = {}) {
-@@ -72,10 +72,10 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
+-const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
++const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
+ 
+ /**
+  * Select local macOS test defaults without reading dotenv files or inheriting release settings.
+@@ -71,7 +71,7 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
      : /^DSH_DESKTOP_MACOS_(?:SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)$/u
    const settings = readSettings(path, name => preset === undefined
      ? SHARED_SETTING.test(name) || platformSetting.test(name)
--    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_(?:TEST|PROD)_ORIGIN|DOWNLOAD_TEST_RELEASE_ID)$/u.test(name) || publicPlatformSetting.test(name))
-+    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_(?:TEST|PROD)_ORIGIN|DOWNLOAD_TEST_RELEASE_ID)$/u.test(name) || publicPlatformSetting.test(name))
+-    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
++    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
    if (preset !== undefined) {
      if (settings.DSH_DESKTOP_AUTO_UPDATE_ENV !== preset) throw new Error('desktop package: preset deployment must match its name')
--    if (!options.unsigned && (platform === 'darwin' || !options.prepareOnly)) {
-+    if (!options.unsigned && !options.publishOnly && (platform === 'darwin' || !options.prepareOnly)) {
-       const filename = platform === 'win32' ? 'windows-signing.env' : 'macos-signing.env'
-       Object.assign(settings, readSettings(join(dirname(dirname(path)), 'secrets', filename),
-         name => platform === 'win32'
+     if (!options.unsigned && (platform === 'darwin' || !options.prepareOnly)) {
 diff --git a/apps/desktop/scripts/notarize-macos-disk-images.mjs b/apps/desktop/scripts/notarize-macos-disk-images.mjs
-index c99c06fac9..38a11846ca 100644
+index c99c06fac9..7b51854290 100644
 --- a/apps/desktop/scripts/notarize-macos-disk-images.mjs
 +++ b/apps/desktop/scripts/notarize-macos-disk-images.mjs
 @@ -1,6 +1,6 @@
@@ -133,13 +127,11 @@ index c99c06fac9..38a11846ca 100644
  import { rmSync } from 'node:fs'
  import { resolveMacOSNotarizationEnvironment } from './desktop-release-environment.mjs'
  import { verifyMacOSDiskImage } from './verify-macos-signature.mjs'
-@@ -25,6 +25,8 @@ export async function notarizeMacOSDiskImageArtifact(
+@@ -25,6 +25,6 @@ export async function notarizeMacOSDiskImageArtifact(
    rmSync(`${artifact.file}.blockmap`, { force: true })
    const credentials = resolveMacOSNotarizationEnvironment(env)
    await submit({ appPath: artifact.file, ...credentials })
 -  verify(artifact.file, expected)
-+  // Ticket validation asks Apple for the same ticket delivery the submission
-+  // just used, so it shares the transient-failure retry.
 +  await retryTransientNotarization(async () => { verify(artifact.file, expected) })
    process.stdout.write(`desktop macOS notarization: verified disk image ${artifact.file}\n`)
  }
@@ -162,10 +154,10 @@ index e0d2713deb..e02fec55b4 100644
 +  options?: { attempts?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> },
 +): Promise<unknown>
 diff --git a/apps/desktop/scripts/notarize-macos.mjs b/apps/desktop/scripts/notarize-macos.mjs
-index 6ddec2781c..c47d670bab 100644
+index 6ddec2781c..adfd5f2c76 100644
 --- a/apps/desktop/scripts/notarize-macos.mjs
 +++ b/apps/desktop/scripts/notarize-macos.mjs
-@@ -3,6 +3,46 @@ import { fileURLToPath } from 'node:url'
+@@ -3,6 +3,45 @@ import { fileURLToPath } from 'node:url'
  import { notarize } from '@electron/notarize'
  import { packagingStep } from './packaging-step.mjs'
  
@@ -180,8 +172,7 @@ index 6ddec2781c..c47d670bab 100644
 +
 +/**
 + * Run one notarization attempt, repeating it when Apple's ticket service loses
-+ * the connection. Non-network failures keep their original single-attempt
-+ * behavior so a signing or credential defect still fails immediately.
++ * the connection.
 + * @param {() => Promise<unknown>} action Complete submission, wait, and staple.
 + * @param {object} [options] Retry bounds.
 + * @param {number} [options.attempts] Maximum attempts, at least one.
@@ -212,7 +203,7 @@ index 6ddec2781c..c47d670bab 100644
  /**
   * Notarize and staple one App or DMG through the measured notarytool adapter.
   * @param {object} options Validated credentials and appPath accepted by electron-notarize.
-@@ -11,5 +51,7 @@ import { packagingStep } from './packaging-step.mjs'
+@@ -11,5 +50,7 @@ import { packagingStep } from './packaging-step.mjs'
  export async function notarizeMacOS(options) {
    const secrets = Object.entries(options).filter(([name]) => /password|key|appleId/iu.test(name)).map(([, value]) => String(value))
    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'notarize-and-staple',
@@ -222,7 +213,7 @@ index 6ddec2781c..c47d670bab 100644
 +    ), secrets)
  }
 diff --git a/apps/desktop/scripts/package-macos.ts b/apps/desktop/scripts/package-macos.ts
-index a95a01b8e5..95b7fdaca0 100644
+index 23087c72e6..3c711e1e13 100644
 --- a/apps/desktop/scripts/package-macos.ts
 +++ b/apps/desktop/scripts/package-macos.ts
 @@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
@@ -234,7 +225,7 @@ index a95a01b8e5..95b7fdaca0 100644
  import { packagingStep } from './packaging-step.mjs'
  import {
    resolveMacOSNotarizationEnvironment,
-@@ -96,7 +96,7 @@ export async function packageMacOSArtifacts(
+@@ -95,7 +95,7 @@ export async function packageMacOSArtifacts(
      const results = await Promise.allSettled([
        timed('App notarization and ZIP', async () => {
          await apple.notarize({ appPath: zipApp, ...credentials })
