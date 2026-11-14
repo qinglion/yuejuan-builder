@@ -63,6 +63,10 @@ jobs:
       QINGCLAW_DSH_ROOT: ${{ github.workspace }}/qingclaw-dsh
       ESIGNER_AUDIT_LOG: ${{ github.workspace }}/esigner-audit.jsonl
     steps:
+      - name: Configure Git line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
       - name: Reject unsafe release combinations
         shell: bash
         run: |
