@@ -12,7 +12,13 @@ function required(name) {
 
 function line(name, value) {
   if (value.includes('\0')) throw new Error(`${name} cannot contain a NUL byte`)
-  return `${name}=${JSON.stringify(value)}`
+  // node:util.parseEnv does not interpret JavaScript-style \" escapes inside a
+  // double-quoted dotenv value. Prefer an unquoted value whenever it is exact;
+  // this is also the only lossless representation for our JSON policy value.
+  if (!/[\r\n#]/u.test(value) && value.trim() === value) return `${name}=${value}`
+  if (!value.includes("'")) return `${name}='${value}'`
+  if (!value.includes('"')) return `${name}="${value}"`
+  throw new Error(`${name} cannot be represented safely in a dotenv file`)
 }
 
 const root = required('QINGCLAW_CONFIG_DIR')

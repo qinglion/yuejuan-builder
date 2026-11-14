@@ -47,3 +47,12 @@ node "${config}" >/dev/null
 test -f "${config_root}/presets/test.env"
 test ! -e "${config_root}/secrets"
 test ! -e "${config_root}/certificates"
+node --input-type=module -e '
+  import { readFile } from "node:fs/promises"
+  import { parseEnv } from "node:util"
+  const values = parseEnv(await readFile(process.argv[1], "utf8"))
+  const policy = JSON.parse(values.DSH_DESKTOP_MANDATORY_UPDATE_CONFIG)
+  if (policy.allowedAuthOrigins?.[0] !== "https://beta.qingclaw.com") {
+    throw new Error("test policy did not round-trip through node:util.parseEnv")
+  }
+' "${config_root}/presets/test.env"
