@@ -47,7 +47,7 @@ for file in "${dmg}" "${zip}" "${blockmap}" "${feed}"; do
 done
 
 # Keep the updater metadata consistent with the files beside it.
-feed_version="$(grep -E '^version:' "${feed}" | head -n1 | sed 's/^version:[[:space:]]*//')"
+feed_version="$(grep -E '^version:' "${feed}" | head -n1 | sed -E 's/^version:[[:space:]]*//; s/^"//; s/"$//')"
 if [[ "${feed_version}" != "${QINGCLAW_VERSION}" ]]; then
   echo "[ERROR] ${feed} declares version '${feed_version}', expected '${QINGCLAW_VERSION}'" >&2
   exit 1
@@ -95,7 +95,7 @@ if ! printf '%s\n' "${feed_headers}" | grep -Eiq '^cache-control:.*no-(store|cac
   echo "[ERROR] ${feed_url} is missing a no-cache Cache-Control header" >&2
   exit 1
 fi
-remote_version="$(curl -fsSL --retry 3 --retry-delay 2 "${feed_url}" | grep -E '^version:' | head -n1 | sed 's/^version:[[:space:]]*//')"
+remote_version="$(curl -fsSL --retry 3 --retry-delay 2 "${feed_url}" | grep -E '^version:' | head -n1 | sed -E 's/^version:[[:space:]]*//; s/^"//; s/"$//')"
 if [[ "${remote_version}" != "${QINGCLAW_VERSION}" ]]; then
   echo "[ERROR] ${feed_url} reports '${remote_version}', expected '${QINGCLAW_VERSION}'" >&2
   exit 1
