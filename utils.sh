@@ -157,3 +157,132 @@ ensure_app_dir() {
 }
 
 
+
+# ---------------------------------------------------------------------------
+# Alibaba Cloud OSS helpers shared by Yuejuan and QingClaw.
+#
+# Both products upload signed installers and their update metadata with the
+# same ossutil invocation: three attempts, public-read ACL, and explicit
+# cache metadata. Product-specific object keys stay in the caller.
+# ---------------------------------------------------------------------------
+
+OSSUTIL_VERSION="${OSSUTIL_VERSION:-2.3.0}"
+OSSUTIL_BASE_URL="${OSSUTIL_BASE_URL:-https://gosspublic.alicdn.com/ossutil/v2/${OSSUTIL_VERSION}}"
+
+install_ossutil_for_host() {
+  local os="$1" arch="$2" zip_name="$3" extract_dir="$4" binary_name="$5"
+
+  echo "Downloading ossutil for ${os}/${arch}..."
+  if ! curl -fSL --connect-timeout 30 --retry 3 "${OSSUTIL_BASE_URL}/${zip_name}" -o ossutil.zip; then
+    echo "[ERROR] Failed to download ossutil from ${OSSUTIL_BASE_URL}/${zip_name}" >&2
+    return 1
+  fi
+  if ! unzip -q ossutil.zip; then
+    echo "[ERROR] Failed to unzip ossutil.zip" >&2
+    rm -f ossutil.zip
+    return 1
+  fi
+  if [[ ! -f "${extract_dir}/${binary_name}" ]]; then
+    echo "[ERROR] Expected ossutil binary not found: ${extract_dir}/${binary_name}" >&2
+    rm -rf ossutil.zip "${extract_dir}"
+    return 1
+  fi
+
+  mkdir -p ./bin
+  chmod 755 "${extract_dir}/${binary_name}" 2>/dev/null || true
+  mv "${extract_dir}/${binary_name}" ./bin/
+  export PATH="$(pwd)/bin:${PATH}"
+  rm -rf ossutil.zip "${extract_dir}"
+
+  if ! command -v ossutil &> /dev/null; then
+    echo "[ERROR] ossutil installed to ./bin/ but not found in PATH" >&2
+    return 1
+  fi
+  echo "ossutil installed successfully: $(ossutil --version 2>&1 || echo 'version check skipped')"
+}
+
+# Install ossutil 2.x when the host does not already provide it.
+ensure_ossutil() {
+  if command -v ossutil &> /dev/null; then
+    return 0
+  fi
+  echo "Installing ossutil v${OSSUTIL_VERSION}..."
+  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if [[ "$(uname -m)" == "x86_64" ]]; then
+      install_ossutil_for_host "linux" "amd64" \
+        "ossutil-${OSSUTIL_VERSION}-linux-amd64.zip" \
+        "ossutil-${OSSUTIL_VERSION}-linux-amd64" "ossutil" || return 1
+    else
+      install_ossutil_for_host "linux" "arm64" \
+        "ossutil-${OSSUTIL_VERSION}-linux-arm64.zip" \
+        "ossutil-${OSSUTIL_VERSION}-linux-arm64" "ossutil" || return 1
+    fi
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    local mac_arch="${VSCODE_ARCH:-$(uname -m)}"
+    if [[ "${mac_arch}" == "x64" || "${mac_arch}" == "x86_64" || "${mac_arch}" == "amd64" ]]; then
+      install_ossutil_for_host "mac" "amd64" \
+        "ossutil-${OSSUTIL_VERSION}-mac-amd64.zip" \
+        "ossutil-${OSSUTIL_VERSION}-mac-amd64" "ossutil" || return 1
+    else
+      install_ossutil_for_host "mac" "arm64" \
+        "ossutil-${OSSUTIL_VERSION}-mac-arm64.zip" \
+        "ossutil-${OSSUTIL_VERSION}-mac-arm64" "ossutil" || return 1
+    fi
+  elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+    if ! install_ossutil_for_host "windows" "amd64" \
+      "ossutil-${OSSUTIL_VERSION}-windows-amd64.zip" \
+      "ossutil-${OSSUTIL_VERSION}-windows-amd64" "ossutil.exe"; then
+      echo "Bash download failed, trying PowerShell fallback..." >&2
+      pwsh -NoProfile -Command "
+        \$url = '${OSSUTIL_BASE_URL}/ossutil-${OSSUTIL_VERSION}-windows-amd64.zip'
+        Invoke-WebRequest -Uri \$url -OutFile ossutil.zip -ErrorAction Stop
+        Expand-Archive -Path ossutil.zip -DestinationPath . -Force
+        New-Item -ItemType Directory -Force ./bin | Out-Null
+        Move-Item -Force 'ossutil-${OSSUTIL_VERSION}-windows-amd64/ossutil.exe' ./bin/
+        Remove-Item -Recurse -Force ossutil.zip, 'ossutil-${OSSUTIL_VERSION}-windows-amd64'
+      " || { echo "[ERROR] PowerShell fallback also failed" >&2; return 1; }
+      export PATH="$(pwd)/bin:${PATH}"
+      command -v ossutil &> /dev/null || { echo "[ERROR] ossutil still not found after PowerShell install" >&2; return 1; }
+    fi
+  else
+    echo "[ERROR] Unsupported OS for ossutil: ${OSTYPE}" >&2
+    return 1
+  fi
+}
+
+# Upload one object with public-read access and optional cache/content metadata.
+# Usage: oss_upload_file <local-path> <object-key> [content-type] [cache-control]
+oss_upload_file() {
+  local file_path="$1" object_key="$2" content_type="${3:-}" cache_control="${4:-}"
+  if [[ ! -f "${file_path}" ]]; then
+    echo "[ERROR] OSS upload source missing: ${file_path}" >&2
+    return 1
+  fi
+  if [[ -z "${OSS_ACCESS_KEY_ID:-}" || -z "${OSS_ACCESS_KEY_SECRET:-}" || -z "${OSS_BUCKET_NAME:-}" ]]; then
+    echo "[ERROR] OSS credentials are required but missing." >&2
+    return 1
+  fi
+  ensure_ossutil || return 1
+
+  local -a metadata=()
+  [[ -n "${content_type}" ]] && metadata+=(--content-type "${content_type}")
+  [[ -n "${cache_control}" ]] && metadata+=(--cache-control "${cache_control}")
+
+  local attempt
+  for attempt in 1 2 3; do
+    echo "Uploading ${file_path} -> oss://${OSS_BUCKET_NAME}/${object_key} (attempt ${attempt})"
+    if ossutil cp "${file_path}" "oss://${OSS_BUCKET_NAME}/${object_key}" -f \
+      --access-key-id "${OSS_ACCESS_KEY_ID}" \
+      --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
+      --endpoint "https://${OSS_ENDPOINT}" \
+      --acl public-read \
+      "${metadata[@]}"; then
+      return 0
+    fi
+    if [[ "${attempt}" -lt 3 ]]; then
+      sleep 10
+    fi
+  done
+  echo "[ERROR] Failed to upload ${file_path} after 3 attempts" >&2
+  return 1
+}

@@ -81,134 +81,9 @@ if [[ -z "${OSS_ACCESS_KEY_ID}" || -z "${OSS_ACCESS_KEY_SECRET}" || -z "${OSS_BU
   exit 1
 fi
 
-# Install ossutil 2.x if not present
-OSSUTIL_VERSION="2.3.0"
-OSSUTIL_BASE_URL="https://gosspublic.alicdn.com/ossutil/v2/${OSSUTIL_VERSION}"
-
-install_ossutil() {
-  local os="$1" arch="$2" zip_name="$3" extract_dir="$4" binary_name="$5"
-
-  echo "Downloading ossutil for ${os}/${arch}..."
-  if ! curl -fSL --connect-timeout 30 --retry 3 "${OSSUTIL_BASE_URL}/${zip_name}" -o ossutil.zip; then
-    echo "[ERROR] Failed to download ossutil from ${OSSUTIL_BASE_URL}/${zip_name}"
-    return 1
-  fi
-
-  if ! unzip -q ossutil.zip; then
-    echo "[ERROR] Failed to unzip ossutil.zip"
-    rm -f ossutil.zip
-    return 1
-  fi
-
-  if [[ ! -f "${extract_dir}/${binary_name}" ]]; then
-    echo "[ERROR] Expected binary not found: ${extract_dir}/${binary_name}"
-    rm -rf ossutil.zip "${extract_dir}"
-    return 1
-  fi
-
-  mkdir -p "./bin"
-  chmod 755 "${extract_dir}/${binary_name}" 2>/dev/null || true
-  mv "${extract_dir}/${binary_name}" "./bin/"
-  export PATH="$(pwd)/bin:$PATH"
-  rm -rf ossutil.zip "${extract_dir}"
-
-  # Verify installation
-  if ! command -v ossutil &> /dev/null; then
-    echo "[ERROR] ossutil installed to ./bin/ but not found in PATH"
-    return 1
-  fi
-
-  echo "ossutil installed successfully: $(ossutil --version 2>&1 || echo 'version check skipped')"
-  return 0
-}
-
-if ! command -v ossutil &> /dev/null; then
-  echo "Installing ossutil v${OSSUTIL_VERSION}..."
-  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    if [[ "$(uname -m)" == "x86_64" ]]; then
-      install_ossutil "linux" "amd64" \
-        "ossutil-${OSSUTIL_VERSION}-linux-amd64.zip" \
-        "ossutil-${OSSUTIL_VERSION}-linux-amd64" "ossutil" || exit 1
-    else
-      install_ossutil "linux" "arm64" \
-        "ossutil-${OSSUTIL_VERSION}-linux-arm64.zip" \
-        "ossutil-${OSSUTIL_VERSION}-linux-arm64" "ossutil" || exit 1
-    fi
-  elif [[ "$OSTYPE" == "darwin"* ]]; then
-    # Prefer VSCODE_ARCH (set by CI) over uname -m to avoid Rosetta confusion
-    _mac_arch="${VSCODE_ARCH:-$(uname -m)}"
-    if [[ "${_mac_arch}" == "x64" || "${_mac_arch}" == "x86_64" || "${_mac_arch}" == "amd64" ]]; then
-      install_ossutil "mac" "amd64" \
-        "ossutil-${OSSUTIL_VERSION}-mac-amd64.zip" \
-        "ossutil-${OSSUTIL_VERSION}-mac-amd64" "ossutil" || exit 1
-    else
-      install_ossutil "mac" "arm64" \
-        "ossutil-${OSSUTIL_VERSION}-mac-arm64.zip" \
-        "ossutil-${OSSUTIL_VERSION}-mac-arm64" "ossutil" || exit 1
-    fi
-  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-    # Windows (Git Bash / MSYS2 / Cygwin)
-    if ! install_ossutil "windows" "amd64" \
-      "ossutil-${OSSUTIL_VERSION}-windows-amd64.zip" \
-      "ossutil-${OSSUTIL_VERSION}-windows-amd64" "ossutil.exe"; then
-      # Fallback: try PowerShell download
-      echo "Bash download failed, trying PowerShell fallback..."
-      pwsh -NoProfile -Command "
-        \$url = '${OSSUTIL_BASE_URL}/ossutil-${OSSUTIL_VERSION}-windows-amd64.zip'
-        Write-Host \"Downloading \$url\"
-        Invoke-WebRequest -Uri \$url -OutFile ossutil.zip -ErrorAction Stop
-        Expand-Archive -Path ossutil.zip -DestinationPath . -Force
-        New-Item -ItemType Directory -Force ./bin | Out-Null
-        Move-Item -Force 'ossutil-${OSSUTIL_VERSION}-windows-amd64/ossutil.exe' ./bin/
-        Remove-Item -Recurse -Force ossutil.zip, 'ossutil-${OSSUTIL_VERSION}-windows-amd64'
-      " || { echo "[ERROR] PowerShell fallback also failed"; exit 1; }
-      export PATH="$(pwd)/bin:$PATH"
-      if ! command -v ossutil &> /dev/null; then
-        echo "[ERROR] ossutil still not found after PowerShell install"
-        exit 1
-      fi
-      echo "ossutil installed via PowerShell fallback"
-    fi
-  else
-    echo "[ERROR] Unsupported OS: ${OSTYPE}"
-    exit 1
-  fi
-fi
-
+# ossutil installation and object upload are shared with QingClaw in utils.sh.
 get_platform() {
   echo "${VSCODE_PLATFORM:-linux}"
-}
-
-upload_to_oss() {
-  local file_path="$1"; local file_name="$2"; local platform="$3"
-  # Fallback: parse version like 1.2.3 or 1.2.3-xx from file name when RELEASE_VERSION is empty
-  local inferred_version
-  if is_version_missing "${RELEASE_VERSION}"; then
-    inferred_version=$( echo "${file_name}" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?' | head -n1 || true )
-    RELEASE_VERSION="${inferred_version}"
-  fi
-  local oss_path="${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${file_name}"
-  echo "Uploading ${file_name} -> oss://${OSS_BUCKET_NAME}/${oss_path}"
-  for i in {1..3}; do
-    if ossutil cp "${file_path}" "oss://${OSS_BUCKET_NAME}/${oss_path}" -f \
-      --access-key-id "${OSS_ACCESS_KEY_ID}" \
-      --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
-      --endpoint "https://${OSS_ENDPOINT}"; then
-      ossutil set-acl "oss://${OSS_BUCKET_NAME}/${oss_path}" --acl public-read \
-        --access-key-id "${OSS_ACCESS_KEY_ID}" \
-        --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
-        --endpoint "https://${OSS_ENDPOINT}"
-      echo "Successfully uploaded ${file_name} (attempt ${i})"
-      return 0
-    else
-      echo "Failed to upload ${file_name} (attempt ${i})"
-      if [[ $i -eq 3 ]]; then
-        echo "Failed to upload ${file_name} after 3 attempts"
-        return 1
-      fi
-      sleep 10
-    fi
-  done
 }
 
 cd assets || { echo "[ERROR] assets dir not found"; exit 1; }
@@ -217,7 +92,8 @@ exit_code=0
 for file in *; do
   if [[ -f "$file" ]]; then
     platform=$(get_platform)
-    if ! upload_to_oss "$file" "$file" "$platform"; then
+    oss_path="${APP_NAME}/${APP_QUALITY}/${RELEASE_VERSION}/${platform}/${file}"
+    if ! oss_upload_file "$file" "${oss_path}" "" ""; then
       echo "[ERROR] Failed to upload ${file}"
       exit_code=1
     fi
