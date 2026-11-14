@@ -19,9 +19,10 @@ for (const [name, value] of Object.entries({ QINGCLAW_DSH_ROOT: dshRoot, QINGCLA
   if (value === undefined || value.trim() === '') throw new Error(`${name} is required`)
 }
 
-const [{ createElectronBuilderConfig }, { loadDesktopPackageEnvironment }] = await Promise.all([
+const [{ createElectronBuilderConfig }, { loadDesktopPackageEnvironment }, { default: eSigner }] = await Promise.all([
   import(pathToFileURL(resolve(dshRoot, 'apps/desktop/scripts/electron-builder-config.mjs')).href),
   import(pathToFileURL(resolve(dshRoot, 'apps/desktop/scripts/desktop-package-environment.mjs')).href),
+  import(pathToFileURL(signHook).href),
 ])
 
 export default async function qingclawWindowsConfig() {
@@ -37,8 +38,8 @@ export default async function qingclawWindowsConfig() {
   config.win = {
     ...config.win,
     forceCodeSigning: true,
-    sign: signHook,
+    signtoolOptions: { sign: eSigner, signingHashAlgorithms: ['sha256'] },
   }
-  delete config.win.signtoolOptions
+  delete config.win.sign
   return config
 }
