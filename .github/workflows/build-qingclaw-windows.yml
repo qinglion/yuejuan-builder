@@ -196,6 +196,10 @@ jobs:
           DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
           DSH_DESKTOP_APP_ID: ${{ inputs.deployment == 'production' && 'com.qinglion.qingclaw' || 'com.qinglion.qingclaw.test' }}
           QINGCLAW_WIN_UPDATE_URL: https://d.qinglion.com/qingclaw/${{ inputs.deployment == 'production' && 'stable' || 'beta' }}/desktop/win-x64/
+          ES_USERNAME: ${{ secrets.ES_USERNAME }}
+          ES_PASSWORD: ${{ secrets.ES_PASSWORD }}
+          CREDENTIAL_ID: ${{ secrets.CREDENTIAL_ID }}
+          ES_TOTP_SECRET: ${{ secrets.ES_TOTP_SECRET }}
         run: |
           mkdir -p "${QINGCLAW_WIN_OUTPUT}"
           cd qingclaw-dsh/apps/desktop
