@@ -78,6 +78,7 @@ jobs:
         shell: bash
         env:
           DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          TAR_OPTIONS: --force-local
         run: >-
           pnpm --filter @deepseek-ai/dsh-desktop run package:win:x64:dir --
           --unsigned --build-version "${QINGCLAW_VERSION}"
