@@ -13,6 +13,8 @@ const output = process.env.QINGCLAW_WIN_OUTPUT
 const signHook = process.env.QINGCLAW_WIN_SIGN_HOOK
 const updateUrl = process.env.QINGCLAW_WIN_UPDATE_URL
 const channel = process.env.QINGCLAW_CHANNEL || 'nightly'
+const version = process.env.QINGCLAW_VERSION
+if (!version) throw new Error('QINGCLAW_VERSION is required')
 
 for (const [name, value] of Object.entries({ QINGCLAW_DSH_ROOT: dshRoot, QINGCLAW_WIN_OUTPUT: output,
   QINGCLAW_WIN_SIGN_HOOK: signHook, QINGCLAW_WIN_UPDATE_URL: updateUrl })) {
@@ -33,7 +35,11 @@ export default async function qingclawWindowsConfig() {
   const config = createElectronBuilderConfig(baseEnv, 'win32', 'x64')
 
   config.directories = { ...config.directories, output }
-  config.artifactName = 'qingclaw-${version}-windows-x64.${ext}'
+  // The DSH checkout keeps the product version (0.2.2-rc.3); the test build
+  // version must reach the installer and the update feed so electron-updater
+  // can order builds within the same base.
+  config.extraMetadata = { ...config.extraMetadata, version }
+  config.artifactName = `qingclaw-${version}-windows-x64.\${ext}`
   config.publish = [{ provider: 'generic', url: updateUrl, channel }]
   config.win = {
     ...config.win,
