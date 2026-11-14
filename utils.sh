@@ -275,6 +275,7 @@ oss_upload_file() {
       --access-key-id "${OSS_ACCESS_KEY_ID}" \
       --access-key-secret "${OSS_ACCESS_KEY_SECRET}" \
       --endpoint "https://${OSS_ENDPOINT}" \
+      --region "${OSS_REGION:-oss-cn-hangzhou}" \
       --acl public-read \
       "${metadata[@]}"; then
       return 0
