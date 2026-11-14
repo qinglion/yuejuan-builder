@@ -64,18 +64,35 @@ bash release.sh
 
 青狮龙虾使用独立的手动工作流 `.github/workflows/build-qingclaw-macos.yml`。该工作流在
 GitHub 托管的 Intel 与 Apple Silicon macOS runner 上检出 `qinglion/qingclaw-dsh`，调用
-DSH 自己的签名、公证、更新清单与 OSS 安全发布命令，再把安装包和发布审计记录保留为
-Actions artifact。
+DSH 自己的签名、公证与更新清单命令，并在同一个 macOS job 内把产物上传到 OSS。
 
-下载域名统一复用 `https://d.qinglion.com`：测试固定下载位于 `test/desktop/`，生产固定下载
-位于 `desktop/`；自动更新文件继续使用 DSH 的 `qingclaw-desktop/` 版本化对象布局。不要把
-旧的 Yuejuan `build.sh`、`upload_to_oss.sh` 或 `release.sh` 用于 QingClaw，它们的产物和更新
-协议不同。
+官网下载、electron-updater 和打包上传共用同一个根：
 
-`d.qinglion.com` 前面有阿里云 CDN。DSH 会给版本化二进制写入长期 immutable 缓存头，给
-更新 feed 和 `qingclaw-latest-*` 固定别名写入禁止缓存头。CDN 已为
-`qingclaw-desktop/`、`desktop/`、`test/desktop/` 配置 0 秒目录缓存规则（权重 99），根目录
-原有 1 个月规则降为权重 1；发布后仍要用响应头和文件哈希复核实际命中行为。
+```text
+qingclaw/<quality>/desktop/
+  qingclaw-<version>-macos-arm64.dmg
+  qingclaw-<version>-macos-x64.dmg
+  arm64/nightly-mac.yml
+  arm64/qingclaw-<version>-mac-arm64.zip
+  arm64/qingclaw-<version>-mac-arm64.zip.blockmap
+  x64/nightly-mac.yml
+  x64/qingclaw-<version>-mac-x64.zip
+  x64/qingclaw-<version>-mac-x64.zip.blockmap
+```
+
+`<quality>` 测试为 `beta`、生产为 `stable`。客户端更新地址是
+`https://d.qinglion.com/qingclaw/<quality>/desktop/<arch>/`，electron-updater 读取目录下的
+`nightly-mac.yml`；官网读取同一个 YAML 的 `version`，再拼带版本号的 DMG 地址，因此不再需要
+按版本配置环境变量。
+
+上传统一走 `utils.sh` 中的 `oss_upload_file`：ossutil 三次重试、`public-read` ACL、显式
+`--region`、`--cache-control`。带版本号的 DMG/ZIP 写入长期 immutable 缓存；YAML 写入
+`no-store`，CDN 返回 `x-swift-cachetime: 0`，发布后应回源复核版本号。`d.qinglion.com`
+前面是阿里云 CDN，`qingclaw/` 前缀使用 0 秒目录缓存。
+
+`scripts/qingclaw/upload-desktop.sh` 可单独重跑已保留的 Actions artifact；需要只补上传而不
+重新打包时，使用 `.github/workflows/upload-qingclaw-artifacts.yml`。不要把旧的 Yuejuan
+`build.sh` 或 `release.sh` 用于 QingClaw，它们的产物和更新协议不同。
 
 工作流复用现有 macOS 与 OSS secrets，并会从 P12 的 Developer ID Application 证书自动读取
 签名身份。必要时可以用非敏感的 Repository Variable 显式覆盖：
