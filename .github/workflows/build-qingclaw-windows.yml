@@ -1,0 +1,244 @@
+name: qingclaw-windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Full QingClaw build version (SemVer)'
+        required: true
+        type: string
+      deployment:
+        description: 'Update deployment'
+        required: true
+        type: choice
+        options:
+          - test
+          - production
+        default: test
+      channel:
+        description: 'electron-updater channel'
+        required: true
+        type: choice
+        options:
+          - nightly
+          - stable
+        default: nightly
+      dsh_ref:
+        description: 'qinglion/qingclaw-dsh branch, tag, or commit'
+        required: true
+        type: string
+        default: codex/qingclaw-bootstrap
+      test_release_id:
+        description: 'Optional 32-char hex test deployment ID; generated from this run when blank'
+        required: false
+      publish:
+        description: 'Upload the installer and feed to d.qinglion.com'
+        required: true
+        type: boolean
+        default: true
+
+run-name: qingclaw-windows (${{ inputs.version }}, ${{ inputs.deployment }}, ${{ inputs.channel }})
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package Windows x64
+    runs-on: windows-2022
+    concurrency:
+      group: qingclaw-windows-${{ inputs.deployment }}-${{ inputs.channel }}
+      cancel-in-progress: false
+    env:
+      QINGCLAW_VERSION: ${{ inputs.version }}
+      QINGCLAW_DEPLOYMENT: ${{ inputs.deployment }}
+      QINGCLAW_CHANNEL: ${{ inputs.channel }}
+      QINGCLAW_QUALITY: ${{ inputs.deployment == 'production' && 'stable' || 'beta' }}
+      DSH_PACKAGING_PRESET: ${{ inputs.deployment }}
+      DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.channel }}
+      WIN_UNPACKED: ${{ github.workspace }}/qingclaw-dsh/apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/win-unpacked
+      QINGCLAW_WIN_OUTPUT: ${{ github.workspace }}/qingclaw-win-artifacts
+      QINGCLAW_WIN_SIGN_HOOK: ${{ github.workspace }}/scripts/esigner-windows.cjs
+      QINGCLAW_WIN_NSIS_CONFIG: ${{ github.workspace }}/scripts/qingclaw/win-nsis.config.mjs
+      QINGCLAW_DSH_ROOT: ${{ github.workspace }}/qingclaw-dsh
+      ESIGNER_AUDIT_LOG: ${{ github.workspace }}/esigner-audit.jsonl
+    steps:
+      - name: Reject unsafe release combinations
+        shell: bash
+        run: |
+          if [[ "${QINGCLAW_DEPLOYMENT}" == "production" && "${QINGCLAW_CHANNEL}" != "stable" ]]; then
+            echo 'Production releases must use the stable updater channel' >&2
+            exit 1
+          fi
+
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Checkout QingClaw DSH
+        uses: actions/checkout@v4
+        with:
+          repository: qinglion/qingclaw-dsh
+          ref: ${{ inputs.dsh_ref }}
+          path: qingclaw-dsh
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate trusted DSH source
+        working-directory: qingclaw-dsh
+        shell: bash
+        run: |
+          trusted_ref='codex/qingclaw-bootstrap'
+          git fetch --no-tags origin "refs/heads/${trusted_ref}:refs/remotes/origin/${trusted_ref}"
+          if ! git merge-base --is-ancestor HEAD "origin/${trusted_ref}"; then
+            echo "Selected DSH ref is not part of ${trusted_ref}; refusing to expose release credentials" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.9.0'
+
+      - name: Activate pnpm 11.28.5
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.28.5 --activate
+
+      - name: Resolve test release ID
+        id: release
+        shell: bash
+        env:
+          REQUESTED_RELEASE_ID: ${{ inputs.test_release_id || vars.QINGCLAW_TEST_RELEASE_ID }}
+        run: |
+          if [[ "${QINGCLAW_DEPLOYMENT}" == "test" ]]; then
+            release_id="${REQUESTED_RELEASE_ID}"
+            if [[ -z "${release_id}" ]]; then
+              release_id="$(printf '%s' "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${QINGCLAW_VERSION}" | sha256sum | cut -c1-32)"
+            fi
+            if [[ ! "${release_id}" =~ ^[a-f0-9]{32}$ ]]; then
+              echo 'test_release_id must contain 32 lowercase hexadecimal characters' >&2
+              exit 1
+            fi
+            echo "id=${release_id}" >> "${GITHUB_OUTPUT}"
+          else
+            echo 'id=' >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Prepare packaging configuration
+        env:
+          QINGCLAW_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          QINGCLAW_TEST_RELEASE_ID: ${{ steps.release.outputs.id }}
+          QINGCLAW_PUBLISH_ONLY: '1'
+          QINGCLAW_PLATFORM: windows
+        run: node scripts/qingclaw/write-packaging-config.mjs
+
+      - name: Install DSH dependencies
+        working-directory: qingclaw-dsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Build unsigned win-unpacked
+        working-directory: qingclaw-dsh
+        shell: bash
+        env:
+          DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          TAR_OPTIONS: --force-local
+        run: >-
+          pnpm --filter @deepseek-ai/dsh-desktop run package:win:x64:dir --
+          --unsigned --build-version "${QINGCLAW_VERSION}"
+
+      - name: Write updater configuration
+        shell: bash
+        env:
+          QINGCLAW_WIN_UNPACKED: ${{ env.WIN_UNPACKED }}
+          QINGCLAW_WIN_UPDATE_URL: https://d.qinglion.com/qingclaw/${{ inputs.deployment == 'production' && 'stable' || 'beta' }}/desktop/win-x64/
+        run: node scripts/qingclaw/write-win-update-config.mjs
+
+      - name: Prepare application payload for signing
+        shell: pwsh
+        run: |
+          ./scripts/windows-signing.ps1 `
+            -Mode Prepare `
+            -SourceRoot "$env:WIN_UNPACKED" `
+            -StagingDir signing_app_input `
+            -MappingPath signing_app_mapping.json `
+            -Extensions @('.exe', '.dll')
+
+      - name: Sign application payload with SSL.com
+        uses: sslcom/esigner-codesign@b7f8ff36fc0de8690fbbab8e5b4421d29802f747
+        with:
+          command: batch_sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          dir_path: ${{ github.workspace }}/signing_app_input
+          output_path: ${{ github.workspace }}/signing_app_output
+          override: true
+          malware_block: true
+          environment_name: PROD
+          clean_logs: true
+          jvm_max_memory: 1024M
+          signing_method: v1
+
+      - name: Restore signed application payload
+        shell: pwsh
+        run: |
+          ./scripts/windows-signing.ps1 `
+            -Mode RestoreAndVerify `
+            -SourceRoot "$env:WIN_UNPACKED" `
+            -SignedDir signing_app_output `
+            -MappingPath signing_app_mapping.json `
+            -Extensions @('.exe', '.dll')
+
+      - name: Build signed NSIS installer
+        shell: bash
+        env:
+          DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+          DSH_DESKTOP_APP_ID: ${{ inputs.deployment == 'production' && 'com.qinglion.qingclaw' || 'com.qinglion.qingclaw.test' }}
+          QINGCLAW_WIN_UPDATE_URL: https://d.qinglion.com/qingclaw/${{ inputs.deployment == 'production' && 'stable' || 'beta' }}/desktop/win-x64/
+        run: |
+          mkdir -p "${QINGCLAW_WIN_OUTPUT}"
+          cd qingclaw-dsh/apps/desktop
+          npx --no-install electron-builder --win nsis --x64 \
+            --prepackaged "${WIN_UNPACKED}" \
+            --config "${QINGCLAW_WIN_NSIS_CONFIG}" \
+            --publish never
+
+      - name: Verify signed installer
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem -Path $env:QINGCLAW_WIN_OUTPUT -Filter '*.exe' -File)
+          if ($installers.Count -eq 0) { throw 'electron-builder produced no installer' }
+          foreach ($installer in $installers) {
+            $signature = Get-AuthenticodeSignature -FilePath $installer.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid signature for $($installer.Name): $($signature.Status)"
+            }
+            Write-Host "verified $($installer.Name): $($signature.SignerCertificate.Subject)"
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $env:QINGCLAW_WIN_OUTPUT 'nightly.yml'))) {
+            throw 'electron-builder produced no nightly.yml feed'
+          }
+
+      - name: Upload installer and feed to OSS
+        if: ${{ inputs.publish }}
+        shell: bash
+        env:
+          QINGCLAW_ARTIFACTS_DIR: ${{ env.QINGCLAW_WIN_OUTPUT }}
+          PUBLIC_DOWNLOAD_DOMAIN: d.qinglion.com
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_REGION: ${{ secrets.OSS_REGION }}
+          VSCODE_ARCH: x64
+        run: bash "${GITHUB_WORKSPACE}/scripts/qingclaw/upload-desktop-windows.sh"
+
+      - name: Retain Windows artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingclaw-windows-${{ inputs.version }}
+          path: ${{ env.QINGCLAW_WIN_OUTPUT }}
+          if-no-files-found: warn
+          retention-days: 14
