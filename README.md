@@ -59,3 +59,30 @@ bash release.sh
 - `RELEASE_VERSION` 默认读取 `APP_DIR/package.json` 的 `version`
 - 自动识别平台：`osx|linux|windows`，并映射为 `darwin|linux|win32`
 - 产物默认从 `APP_DIR/build/` 收集（由 electron-builder 输出目录决定）
+
+## 青狮龙虾（QingClaw）
+
+青狮龙虾使用独立的手动工作流 `.github/workflows/build-qingclaw-macos.yml`。该工作流在
+GitHub 托管的 Intel 与 Apple Silicon macOS runner 上检出 `qinglion/qingclaw-dsh`，调用
+DSH 自己的签名、公证、更新清单与 OSS 安全发布命令，再把安装包和发布审计记录保留为
+Actions artifact。
+
+下载域名统一复用 `https://d.qinglion.com`：测试固定下载位于 `test/desktop/`，生产固定下载
+位于 `desktop/`；自动更新文件继续使用 DSH 的 `qingclaw-desktop/` 版本化对象布局。不要把
+旧的 Yuejuan `build.sh`、`upload_to_oss.sh` 或 `release.sh` 用于 QingClaw，它们的产物和更新
+协议不同。
+
+`d.qinglion.com` 前面有阿里云 CDN。DSH 会给版本化二进制写入长期 immutable 缓存头，给
+更新 feed 和 `qingclaw-latest-*` 固定别名写入禁止缓存头。CDN 已为
+`qingclaw-desktop/`、`desktop/`、`test/desktop/` 配置 0 秒目录缓存规则（权重 99），根目录
+原有 1 个月规则降为权重 1；发布后仍要用响应头和文件哈希复核实际命中行为。
+
+工作流复用现有 macOS 与 OSS secrets，并会从 P12 的 Developer ID Application 证书自动读取
+签名身份。必要时可以用非敏感的 Repository Variable 显式覆盖：
+
+```text
+QINGCLAW_MACOS_SIGNING_IDENTITY=公司名称 (TEAMID)
+```
+
+首版先开放 macOS arm64/x64。Windows 需适配 DSH 的完整签名树与 NSIS/blockmap 后再加入，
+不能仅在最后一步给安装器补签。

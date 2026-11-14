@@ -67,8 +67,7 @@ derive_release_version
 
 # Echo envs
 echo "----------- OSS Upload -----------"
-echo "OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID:0:8}..."
-echo "OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET:0:8}..."
+echo "OSS credentials: configured"
 echo "OSS_BUCKET_NAME=${OSS_BUCKET_NAME}"
 echo "OSS_ENDPOINT=${OSS_ENDPOINT}"
 echo "OSS_REGION=${OSS_REGION}"
