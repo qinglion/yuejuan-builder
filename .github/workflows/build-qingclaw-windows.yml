@@ -94,6 +94,11 @@ jobs:
             exit 1
           fi
 
+      - name: Apply QingClaw packaging patch
+        working-directory: qingclaw-dsh
+        shell: bash
+        run: git apply "${GITHUB_WORKSPACE}/scripts/qingclaw/patches/dsh-packaging.patch"
+
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:

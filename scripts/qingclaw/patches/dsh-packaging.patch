@@ -1,0 +1,245 @@
+diff --git a/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts b/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
+index fcf0bc633d..b2cb837146 100644
+--- a/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
++++ b/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
+@@ -1,6 +1,9 @@
+ /** Environment variable that selects the Desktop update deployment. */
+ export const DESKTOP_AUTO_UPDATE_ENV: 'DSH_DESKTOP_AUTO_UPDATE_ENV'
+ 
++/** Optional stable object prefix that replaces the release-ID feed layout. */
++export const DESKTOP_UPDATE_ROOT_ENV: 'DSH_DESKTOP_UPDATE_ROOT'
++
+ /** Stable QingClaw artifact prefix shared by retained releases and the publisher. */
+ export const DESKTOP_ARTIFACT_PREFIX: 'qingclaw'
+ 
+diff --git a/apps/desktop-publisher/src/desktop-auto-update-environment.mjs b/apps/desktop-publisher/src/desktop-auto-update-environment.mjs
+index 8b57a6c13d..89f544df7e 100644
+--- a/apps/desktop-publisher/src/desktop-auto-update-environment.mjs
++++ b/apps/desktop-publisher/src/desktop-auto-update-environment.mjs
+@@ -5,6 +5,14 @@ import { valid } from 'semver'
+ /** Environment variable that selects the Desktop update deployment. */
+ export const DESKTOP_AUTO_UPDATE_ENV = 'DSH_DESKTOP_AUTO_UPDATE_ENV'
+ 
++/**
++ * Optional stable object prefix that replaces the release-ID feed layout. A
++ * distribution that publishes one continuously updated beta or stable channel
++ * sets this so the packaged app, the publisher, and the website read the same
++ * fixed feed directory.
++ */
++export const DESKTOP_UPDATE_ROOT_ENV = 'DSH_DESKTOP_UPDATE_ROOT'
++
+ /** Stable QingClaw artifact prefix shared by retained releases and the publisher. */
+ export const DESKTOP_ARTIFACT_PREFIX = 'qingclaw'
+ 
+@@ -160,6 +168,21 @@ function httpsOrigin(value, name) {
+   return parsed.origin
+ }
+ 
++/**
++ * Read the optional stable feed prefix.
++ * @param {NodeJS.ProcessEnv} env Packaging or upload environment.
++ * @returns {string | undefined} Lowercase object path segments, without slashes at either end.
++ * @throws {Error} When the value is not a safe object path.
++ */
++function resolveStableUpdateRoot(env) {
++  const value = env[DESKTOP_UPDATE_ROOT_ENV]?.trim()
++  if (value === undefined || value === '') return undefined
++  if (!/^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u.test(value)) {
++    throw new Error(`desktop auto-update: ${DESKTOP_UPDATE_ROOT_ENV} must be lowercase object path segments`)
++  }
++  return value
++}
++
+ /**
+  * Resolve the public updater URL and object prefixes for one release target.
+  * @param {NodeJS.ProcessEnv} env - Packaging or upload environment.
+@@ -175,6 +198,19 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
+   const deployment = UPDATE_ENVIRONMENTS[environment]
+   const { originEnvName } = deployment
+   const origin = httpsOrigin(requiredEnvironmentValue(env, originEnvName), originEnvName)
++  const stableRoot = resolveStableUpdateRoot(env)
++  if (stableRoot !== undefined) {
++    const keyPrefix = `${stableRoot}/${target === 'mac-arm64' ? 'arm64' : target === 'mac-x64' ? 'x64' : 'x64'}`
++    return {
++      environment,
++      channel,
++      target,
++      origin,
++      keyPrefix,
++      binaryKeyPrefix: keyPrefix,
++      publicUrl: `${origin}/${keyPrefix}/`,
++    }
++  }
+   let releasePrefix = DESKTOP_UPDATE_ROOT
+   if (environment === 'test') {
+     const releaseId = requiredEnvironmentValue(env, 'DOWNLOAD_TEST_RELEASE_ID')
+diff --git a/apps/desktop/scripts/desktop-package-environment.d.mts b/apps/desktop/scripts/desktop-package-environment.d.mts
+index ec9da721f1..debfb6293e 100644
+--- a/apps/desktop/scripts/desktop-package-environment.d.mts
++++ b/apps/desktop/scripts/desktop-package-environment.d.mts
+@@ -23,7 +23,7 @@ export function loadDesktopPackageEnvironment(
+   platform: 'win32' | 'darwin',
+   environment?: NodeJS.ProcessEnv,
+   appRoot?: string,
+-  options?: { unsigned?: boolean, prepareOnly?: boolean },
++  options?: { unsigned?: boolean, prepareOnly?: boolean, publishOnly?: boolean },
+ ): NodeJS.ProcessEnv
+ 
+ /**
+diff --git a/apps/desktop/scripts/desktop-package-environment.mjs b/apps/desktop/scripts/desktop-package-environment.mjs
+index 91d53a4a07..762ca3a8e0 100644
+--- a/apps/desktop/scripts/desktop-package-environment.mjs
++++ b/apps/desktop/scripts/desktop-package-environment.mjs
+@@ -16,7 +16,7 @@ import { resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
+ import { QINGCLAW_DISTRIBUTION } from '../../../distribution/qingclaw.mjs'
+ 
+ const APP_ROOT = fileURLToPath(new URL('..', import.meta.url))
+-const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_RELEASE_ID|DOWNLOAD_PROD_EO_ZONE_ID|DOWNLOAD_(?:TEST|PROD)_(?:ORIGIN|COS_BUCKET|COS_SECRET_ID|COS_SECRET_KEY))$/u
++const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_RELEASE_ID|DOWNLOAD_PROD_EO_ZONE_ID|DOWNLOAD_(?:TEST|PROD)_(?:ORIGIN|COS_BUCKET|COS_SECRET_ID|COS_SECRET_KEY))$/u
+ const WINDOWS_SETTING = /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN|SIGNATURE_CACHE_DIR|SIGNATURE_CACHE_CONCURRENCY|PACK_CONCURRENCY|COMPRESSION_LEVEL)$/u
+ const MACOS_SETTING = /^(?:DSH_DESKTOP_MACOS_(?:SIGNING_IDENTITY|TEAM_ID|SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)|APPLE_(?:API_KEY|API_KEY_ID|API_ISSUER|ID|APP_SPECIFIC_PASSWORD|TEAM_ID|KEYCHAIN|KEYCHAIN_PROFILE)|CSC_(?:LINK|KEY_PASSWORD))$/u
+ const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
+@@ -43,7 +43,7 @@ export function localMacOSPackageEnvironment(environment = process.env) {
+  * @param {'win32' | 'darwin'} platform Target platform.
+  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
+  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
+- * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Unsigned presets and Windows preparation-only presets never read signing credentials.
++ * @param {{ unsigned?: boolean, prepareOnly?: boolean, publishOnly?: boolean }} options Unsigned, Windows preparation-only, and publication-only readers never read signing credentials.
+  * @returns {NodeJS.ProcessEnv} Isolated environment with file-owned release settings.
+  */
+ export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT, options = {}) {
+@@ -72,10 +72,10 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
+     : /^DSH_DESKTOP_MACOS_(?:SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)$/u
+   const settings = readSettings(path, name => preset === undefined
+     ? SHARED_SETTING.test(name) || platformSetting.test(name)
+-    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_(?:TEST|PROD)_ORIGIN|DOWNLOAD_TEST_RELEASE_ID)$/u.test(name) || publicPlatformSetting.test(name))
++    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_(?:TEST|PROD)_ORIGIN|DOWNLOAD_TEST_RELEASE_ID)$/u.test(name) || publicPlatformSetting.test(name))
+   if (preset !== undefined) {
+     if (settings.DSH_DESKTOP_AUTO_UPDATE_ENV !== preset) throw new Error('desktop package: preset deployment must match its name')
+-    if (!options.unsigned && (platform === 'darwin' || !options.prepareOnly)) {
++    if (!options.unsigned && !options.publishOnly && (platform === 'darwin' || !options.prepareOnly)) {
+       const filename = platform === 'win32' ? 'windows-signing.env' : 'macos-signing.env'
+       Object.assign(settings, readSettings(join(dirname(dirname(path)), 'secrets', filename),
+         name => platform === 'win32'
+diff --git a/apps/desktop/scripts/notarize-macos-disk-images.mjs b/apps/desktop/scripts/notarize-macos-disk-images.mjs
+index c99c06fac9..38a11846ca 100644
+--- a/apps/desktop/scripts/notarize-macos-disk-images.mjs
++++ b/apps/desktop/scripts/notarize-macos-disk-images.mjs
+@@ -1,6 +1,6 @@
+ /** Notarize and qualify macOS disk images after electron-builder creates them. */
+ 
+-import { notarizeMacOS } from './notarize-macos.mjs'
++import { notarizeMacOS, retryTransientNotarization } from './notarize-macos.mjs'
+ import { rmSync } from 'node:fs'
+ import { resolveMacOSNotarizationEnvironment } from './desktop-release-environment.mjs'
+ import { verifyMacOSDiskImage } from './verify-macos-signature.mjs'
+@@ -25,6 +25,8 @@ export async function notarizeMacOSDiskImageArtifact(
+   rmSync(`${artifact.file}.blockmap`, { force: true })
+   const credentials = resolveMacOSNotarizationEnvironment(env)
+   await submit({ appPath: artifact.file, ...credentials })
+-  verify(artifact.file, expected)
++  // Ticket validation asks Apple for the same ticket delivery the submission
++  // just used, so it shares the transient-failure retry.
++  await retryTransientNotarization(async () => { verify(artifact.file, expected) })
+   process.stdout.write(`desktop macOS notarization: verified disk image ${artifact.file}\n`)
+ }
+diff --git a/apps/desktop/scripts/notarize-macos.d.mts b/apps/desktop/scripts/notarize-macos.d.mts
+index e0d2713deb..e02fec55b4 100644
+--- a/apps/desktop/scripts/notarize-macos.d.mts
++++ b/apps/desktop/scripts/notarize-macos.d.mts
+@@ -6,3 +6,13 @@ import type { MacOSNotarizationEnvironment } from './desktop-release-environment
+  * @returns Resolves after acceptance and stapling; failures remain in the packaging journal.
+  */
+ export function notarizeMacOS(options: MacOSNotarizationEnvironment & { appPath: string }): Promise<void>
++/**
++ * Run one notarization attempt, repeating transient Apple ticket-service failures.
++ * @param action Complete submission, wait, and staple.
++ * @param options Retry bounds and injected wait for tests.
++ * @returns The successful attempt's result.
++ */
++export function retryTransientNotarization(
++  action: () => Promise<unknown>,
++  options?: { attempts?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> },
++): Promise<unknown>
+diff --git a/apps/desktop/scripts/notarize-macos.mjs b/apps/desktop/scripts/notarize-macos.mjs
+index 6ddec2781c..c47d670bab 100644
+--- a/apps/desktop/scripts/notarize-macos.mjs
++++ b/apps/desktop/scripts/notarize-macos.mjs
+@@ -3,6 +3,46 @@ import { fileURLToPath } from 'node:url'
+ import { notarize } from '@electron/notarize'
+ import { packagingStep } from './packaging-step.mjs'
+ 
++/**
++ * Apple failures that a repeated submission or staple can recover from. Ticket
++ * delivery and stapling reach Apple's services from the packaging host, so a
++ * lost connection is not evidence that the signed artifact is invalid.
++ */
++const TRANSIENT_NOTARIZATION_FAILURE = /network connection was lost|NSURLErrorDomain|The staple and validate action failed|timed out|ETIMEDOUT|ECONNRESET|EAI_AGAIN/iu
++
++const sleepFor = ms => new Promise(resolve => setTimeout(resolve, ms))
++
++/**
++ * Run one notarization attempt, repeating it when Apple's ticket service loses
++ * the connection. Non-network failures keep their original single-attempt
++ * behavior so a signing or credential defect still fails immediately.
++ * @param {() => Promise<unknown>} action Complete submission, wait, and staple.
++ * @param {object} [options] Retry bounds.
++ * @param {number} [options.attempts] Maximum attempts, at least one.
++ * @param {number} [options.delayMs] Wait between attempts.
++ * @param {(ms: number) => Promise<void>} [options.sleep] Wait implementation for tests.
++ * @returns {Promise<unknown>} The successful attempt's result.
++ */
++export async function retryTransientNotarization(
++  action,
++  { attempts = 3, delayMs = 30_000, sleep = sleepFor } = {},
++) {
++  if (!Number.isInteger(attempts) || attempts < 1) throw new Error('notarization attempts must be a positive integer')
++  let failure
++  for (let attempt = 1; attempt <= attempts; attempt += 1) {
++    try {
++      return await action()
++    } catch (error) {
++      failure = error
++      const message = error instanceof Error ? error.message : String(error)
++      if (attempt === attempts || !TRANSIENT_NOTARIZATION_FAILURE.test(message)) throw error
++      process.stdout.write(`desktop macOS notarization: transient Apple failure on attempt ${String(attempt)}/${String(attempts)}; retrying in ${String(Math.round(delayMs / 1000))}s\n`)
++      await sleep(delayMs)
++    }
++  }
++  throw failure
++}
++
+ /**
+  * Notarize and staple one App or DMG through the measured notarytool adapter.
+  * @param {object} options Validated credentials and appPath accepted by electron-notarize.
+@@ -11,5 +51,7 @@ import { packagingStep } from './packaging-step.mjs'
+ export async function notarizeMacOS(options) {
+   const secrets = Object.entries(options).filter(([name]) => /password|key|appleId/iu.test(name)).map(([, value]) => String(value))
+   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'notarize-and-staple',
+-    () => notarize({ ...options, notarytoolPath: fileURLToPath(new URL('./logged-notarytool.mjs', import.meta.url)) }), secrets)
++    () => retryTransientNotarization(
++      () => notarize({ ...options, notarytoolPath: fileURLToPath(new URL('./logged-notarytool.mjs', import.meta.url)) }),
++    ), secrets)
+ }
+diff --git a/apps/desktop/scripts/package-macos.ts b/apps/desktop/scripts/package-macos.ts
+index a95a01b8e5..95b7fdaca0 100644
+--- a/apps/desktop/scripts/package-macos.ts
++++ b/apps/desktop/scripts/package-macos.ts
+@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
+ import { mkdtemp, rename, rm, stat } from 'node:fs/promises'
+ import { basename, dirname, join } from 'node:path'
+ import { promisify } from 'node:util'
+-import { notarizeMacOS } from './notarize-macos.mjs'
++import { notarizeMacOS, retryTransientNotarization } from './notarize-macos.mjs'
+ import { packagingStep } from './packaging-step.mjs'
+ import {
+   resolveMacOSNotarizationEnvironment,
+@@ -96,7 +96,7 @@ export async function packageMacOSArtifacts(
+     const results = await Promise.allSettled([
+       timed('App notarization and ZIP', async () => {
+         await apple.notarize({ appPath: zipApp, ...credentials })
+-        apple.verifyNotarization(zipApp, expected)
++        await retryTransientNotarization(async () => { apple.verifyNotarization(zipApp, expected) })
+         await build({ format: 'zip', appPath: zipApp, output: zipOutput })
+       }, secrets),
+       timed('DMG creation and notarization', async () => {
