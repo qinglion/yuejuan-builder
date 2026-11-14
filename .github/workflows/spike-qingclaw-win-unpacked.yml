@@ -74,6 +74,7 @@ jobs:
 
       - name: Build unsigned win-unpacked
         working-directory: qingclaw-dsh
+        shell: bash
         env:
           DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
         run: >-
