@@ -193,16 +193,6 @@ jobs:
             echo '::warning::This source ships Computer Use but predates helper packaging; Computer Use cannot prepare its helper in this package.'
             exit 0
           fi
-          # Swift 6.1 (Xcode 16.4, the runner image default) rejects the helper's
-          # actor-isolated synchronous closure with a region-isolation false
-          # positive that Swift 6.2+ fixed. Compile with the newest installed
-          # Xcode; DEVELOPER_DIR flows through the packaging environment to xcrun
-          # and leaves the rest of the job on the default toolchain.
-          latest_xcode="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
-          if [[ -n "${latest_xcode}" ]]; then
-            export DEVELOPER_DIR="${latest_xcode}/Contents/Developer"
-          fi
-          xcrun swift --version
           mkdir -p dist
           pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
           mkdir dist/cua-helper/extracted

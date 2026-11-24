@@ -109,11 +109,11 @@ Computer Use helper 并放入 provider 包：macOS 用 `scripts/cua-helper/packa
 Windows 用 `dotnet publish` 后放入 `native/bin/win-x64`，随现有 SSL.com 签名树一起
 Authenticode 签名。不下载、不复用官方 DeepSeek 的 helper 产物或 npm tarball。
 
-macOS runner 镜像默认的 Xcode 16.4（Swift 6.1）会对 helper 的 actor 隔离同步闭包
-报 region-isolation 误报；helper 步骤因此把 `DEVELOPER_DIR` 指向镜像中最新的
-Xcode（Swift 6.2+）编译，其余打包步骤仍用默认工具链。补丁同时把 AXWorker 该处
-闭包捕获改为 `WindowGeometry.resolve` 的普通同步参数重载（187 个 Swift 测试通
-过），Swift 6.1–6.4 均可编译。
+macOS runner 镜像默认的 Xcode 16.4（Swift 6.1/6.2）会对 helper 的 actor 隔离
+同步闭包报 region-isolation 误报。补丁把 AXWorker 该处闭包捕获改为
+`WindowGeometry.resolve` 的普通同步参数重载（187 个 Swift 测试通过），Swift
+6.1–6.4 均可编译。helper 步骤保持镜像默认工具链：新版 Xcode 26 的 lipo 改变了
+参数顺序，与上游 verify 代码不兼容。
 
 打包补丁同时把 helper 的 bundle identifier 重品牌为
 `com.qinglion.qingclaw.computer-use`（显示名 `QingClaw Computer Use`），避免与官方
