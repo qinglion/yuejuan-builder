@@ -93,3 +93,36 @@ node --input-type=module -e '
     throw new Error("signing password punctuation did not round-trip")
   }
 ' "${signing_root}/config/presets/production.env" "${signing_root}/config/secrets/macos-signing.env"
+
+# Computer Use helpers must be built from the QingClaw checkout and staged before
+# the desktop package build, using the private QingClaw signing configuration.
+grep -Fq 'scripts/cua-helper/package.ts --out dist/cua-helper' "${workflow}"
+grep -Fq 'scripts/cua-helper/stage.ts --from dist/cua-helper/extracted' "${workflow}"
+if ! awk '/name: Build and stage notarized Computer Use helpers/,/name: Package, sign, and notarize/' "${workflow}" | grep -Fq 'DSH_PACKAGING_CONFIG_DIR'; then
+  echo 'the helper build must use the private QingClaw packaging configuration' >&2
+  exit 1
+fi
+helper_line="$(grep -n 'stage.ts --from' "${workflow}" | head -1 | cut -d: -f1)"
+package_line="$(grep -n 'package:desktop:mac:' "${workflow}" | head -1 | cut -d: -f1)"
+if [[ "${helper_line}" -ge "${package_line}" ]]; then
+  echo 'the notarized helper must be staged before the signed macOS package build' >&2
+  exit 1
+fi
+patch='scripts/qingclaw/patches/dsh-packaging.patch'
+if ! grep -Fq '+    <string>com.qinglion.qingclaw.computer-use</string>' "${patch}"; then
+  echo 'the packaging patch must rebrand the Computer Use helper bundle identifier' >&2
+  exit 1
+fi
+if grep -Fq 'select-artifact.ts' "${workflow}"; then
+  echo 'the QingClaw workflow must not reuse official DeepSeek helper artifacts' >&2
+  exit 1
+fi
+windows_workflow='.github/workflows/build-qingclaw-windows.yml'
+grep -Fq 'dotnet publish' "${windows_workflow}"
+grep -Fq 'native/bin/win-x64' "${windows_workflow}"
+win_helper_line="$(grep -n 'native/bin/win-x64' "${windows_workflow}" | head -1 | cut -d: -f1)"
+win_package_line="$(grep -n 'package:win:x64:dir' "${windows_workflow}" | head -1 | cut -d: -f1)"
+if [[ "${win_helper_line}" -ge "${win_package_line}" ]]; then
+  echo 'the Windows helper must be staged before the unsigned win-unpacked build' >&2
+  exit 1
+fi

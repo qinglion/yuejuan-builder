@@ -234,3 +234,23 @@ index 640c01960f..9cc74fc8a9 100644
          await build({ format: 'zip', appPath: zipApp, output: zipOutput })
        }, secrets),
        timed('DMG creation and notarization', async () => {
+diff --git a/packages/experimental/cua-macos/native/Info.plist b/packages/experimental/cua-macos/native/Info.plist
+--- a/packages/experimental/cua-macos/native/Info.plist
++++ b/packages/experimental/cua-macos/native/Info.plist
+@@ -3,13 +3,13 @@
+ <plist version="1.0">
+ <dict>
+     <key>CFBundleIdentifier</key>
+-    <string>com.deepseek.harness.computer-use</string>
++    <string>com.qinglion.qingclaw.computer-use</string>
+     <key>CFBundleExecutable</key>
+     <string>dsh-cua-native</string>
+     <key>CFBundleName</key>
+-    <string>DSH Computer Use</string>
++    <string>QingClaw Computer Use</string>
+     <key>CFBundleDisplayName</key>
+-    <string>DSH Computer Use</string>
++    <string>QingClaw Computer Use</string>
+     <key>CFBundleIconFile</key>
+     <string>DSHComputerUse.icns</string>
+     <key>CFBundlePackageType</key>

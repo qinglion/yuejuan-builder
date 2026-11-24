@@ -101,5 +101,19 @@ qingclaw/<quality>/desktop/
 QINGCLAW_MACOS_SIGNING_IDENTITY=公司名称 (TEAMID)
 ```
 
+### Computer Use helper
+
+macOS 与 Windows 工作流在依赖安装之后、桌面打包之前，从本次检出的 QingClaw 源码构建
+Computer Use helper 并放入 provider 包：macOS 用 `scripts/cua-helper/package.ts` +
+`stage.ts`，以 QingClaw 自己的 Developer ID 签名并公证（复用同一份私有打包配置）；
+Windows 用 `dotnet publish` 后放入 `native/bin/win-x64`，随现有 SSL.com 签名树一起
+Authenticode 签名。不下载、不复用官方 DeepSeek 的 helper 产物或 npm tarball。
+
+打包补丁同时把 helper 的 bundle identifier 重品牌为
+`com.qinglion.qingclaw.computer-use`（显示名 `QingClaw Computer Use`），避免与官方
+`com.deepseek.harness.computer-use` 共用 macOS 辅助功能/屏幕录制的权限身份。macOS
+运行时签名校验要求 helper 的叶证书与 Team ID 与 QingClaw 应用签名身份一致，官方签名
+的 helper 无法混入 QingClaw 安装包。
+
 首版先开放 macOS arm64/x64。Windows 需适配 DSH 的完整签名树与 NSIS/blockmap 后再加入，
 不能仅在最后一步给安装器补签。

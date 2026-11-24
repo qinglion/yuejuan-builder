@@ -145,6 +145,66 @@ jobs:
         working-directory: qingclaw-dsh
         run: pnpm install --frozen-lockfile
 
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build and stage Windows Computer Use helper
+        # Publish from this QingClaw checkout and stage into the provider package so
+        # the unsigned win-unpacked build carries it; the existing SSL.com signing
+        # pass then authenticodes the helper PE files with the rest of the tree.
+        # Never download or reuse official DeepSeek helper artifacts.
+        working-directory: qingclaw-dsh
+        shell: pwsh
+        run: |
+          $csproj = 'packages/experimental/cua-windows/native/entry/CuaWindows.csproj'
+          if (-not (Test-Path $csproj)) {
+            Write-Host '::warning::This source predates the Windows Computer Use helper; no helper is staged.'
+            exit 0
+          }
+          dotnet restore packages/experimental/cua-windows/native/cua-windows.slnx --locked-mode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project packages/experimental/cua-windows/native/tests/Protocol.Tests.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish $csproj --configuration Release --runtime win-x64 --self-contained true --no-restore --output dist/cua-helper-win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $directory = 'dist/cua-helper-win-x64'
+          $exe = Join-Path $directory 'dsh-cua-windows.exe'
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "helper executable is missing: $exe" }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $commit = (& git rev-parse HEAD).Trim()
+          $sdk = (& dotnet --version).Trim()
+          $keyBytes = [Text.Encoding]::UTF8.GetBytes("$commit`n$sdk`nwin-x64")
+          $buildKey = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($keyBytes)).ToLowerInvariant()
+          $files = [ordered]@{}
+          Get-ChildItem $directory -Recurse -File | Sort-Object FullName | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($directory, $_.FullName) -replace '\\', '/'
+            $files[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          # sha256 is the executable alias of files[dsh-cua-windows.exe].
+          # signing describes this publish output; the application signing pass
+          # authenticodes the staged PE files afterwards.
+          $metadata = [ordered]@{
+            schemaVersion = 1
+            platform = 'windows'
+            buildKey = $buildKey
+            version = $version
+            commit = $commit
+            architecture = 'x64'
+            executable = 'dsh-cua-windows.exe'
+            sha256 = $files['dsh-cua-windows.exe']
+            signing = 'unsigned'
+            files = $files
+          }
+          $json = $metadata | ConvertTo-Json -Depth 5
+          Set-Content -Path (Join-Path $directory 'cua-helper.json') -Value "$json`n" -NoNewline -Encoding utf8NoBOM
+          $destination = 'packages/experimental/cua-windows/native/bin/win-x64'
+          if (Test-Path $destination) { throw "Windows helper staging requires an empty native/bin/win-x64: $destination" }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Copy-Item -Path (Join-Path $directory '*') -Destination $destination -Recurse
+          Write-Host "Windows CUA helper staged for commit $commit"
+
       - name: Build unsigned win-unpacked
         working-directory: qingclaw-dsh
         shell: bash

@@ -176,6 +176,29 @@ jobs:
         working-directory: qingclaw-dsh
         run: pnpm install --frozen-lockfile
 
+      - name: Build and stage notarized Computer Use helpers
+        # The workspace provider is packed into the Desktop runtime, so the installed
+        # app needs the same notarized helper that npm publication stages. Build it
+        # from this QingClaw checkout with the QingClaw Developer ID configured above;
+        # never download or reuse official DeepSeek helper artifacts.
+        working-directory: qingclaw-dsh
+        env:
+          DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
+        run: |
+          if ! node -e "process.exit(require('./apps/cli/package.json').dependencies?.['@deepseek-ai/dsh-cua-bundle'] ? 0 : 1)"; then
+            echo 'This source does not ship Computer Use in Desktop; no helper is staged.'
+            exit 0
+          fi
+          if [[ ! -f scripts/cua-helper/package.ts ]]; then
+            echo '::warning::This source ships Computer Use but predates helper packaging; Computer Use cannot prepare its helper in this package.'
+            exit 0
+          fi
+          mkdir -p dist
+          pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
+          mkdir dist/cua-helper/extracted
+          tar -xzf dist/cua-helper/cua-helper.tgz -C dist/cua-helper/extracted
+          pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted
+
       - name: Package, sign, and notarize
         working-directory: qingclaw-dsh
         env:
@@ -207,6 +230,15 @@ jobs:
         with:
           name: qingclaw-build-${{ inputs.version }}-${{ matrix.target }}
           path: qingclaw-dsh/apps/desktop/.desktop-build/targets/${{ matrix.target }}/artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Retain packaging diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingclaw-macos-logs-${{ inputs.version }}-${{ matrix.target }}
+          path: qingclaw-dsh/apps/desktop/.desktop-build/packaging-runs/
           if-no-files-found: warn
           retention-days: 14
 
