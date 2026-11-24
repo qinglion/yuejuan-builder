@@ -109,6 +109,10 @@ Computer Use helper 并放入 provider 包：macOS 用 `scripts/cua-helper/packa
 Windows 用 `dotnet publish` 后放入 `native/bin/win-x64`，随现有 SSL.com 签名树一起
 Authenticode 签名。不下载、不复用官方 DeepSeek 的 helper 产物或 npm tarball。
 
+macOS runner 镜像默认的 Xcode 16.4（Swift 6.1）会对 helper 的 actor 隔离同步闭包
+报 region-isolation 误报；helper 步骤因此把 `DEVELOPER_DIR` 指向镜像中最新的
+Xcode（Swift 6.2+）编译，其余打包步骤仍用默认工具链。
+
 打包补丁同时把 helper 的 bundle identifier 重品牌为
 `com.qinglion.qingclaw.computer-use`（显示名 `QingClaw Computer Use`），避免与官方
 `com.deepseek.harness.computer-use` 共用 macOS 辅助功能/屏幕录制的权限身份。macOS

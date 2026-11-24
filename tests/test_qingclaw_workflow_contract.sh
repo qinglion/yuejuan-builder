@@ -102,6 +102,10 @@ if ! awk '/name: Build and stage notarized Computer Use helpers/,/name: Package,
   echo 'the helper build must use the private QingClaw packaging configuration' >&2
   exit 1
 fi
+if ! awk '/name: Build and stage notarized Computer Use helpers/,/name: Package, sign, and notarize/' "${workflow}" | grep -Fq 'DEVELOPER_DIR'; then
+  echo 'the helper build must select a Swift 6.2+ Xcode toolchain' >&2
+  exit 1
+fi
 helper_line="$(grep -n 'stage.ts --from' "${workflow}" | head -1 | cut -d: -f1)"
 package_line="$(grep -n 'package:desktop:mac:' "${workflow}" | head -1 | cut -d: -f1)"
 if [[ "${helper_line}" -ge "${package_line}" ]]; then
