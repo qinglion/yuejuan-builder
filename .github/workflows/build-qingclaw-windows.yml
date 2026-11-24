@@ -27,7 +27,7 @@ on:
         description: 'qinglion/qingclaw-dsh branch, tag, or commit'
         required: true
         type: string
-        default: codex/qingclaw-bootstrap
+        default: beta
       test_release_id:
         description: 'Optional 32-char hex test deployment ID; generated from this run when blank'
         required: false
@@ -91,7 +91,7 @@ jobs:
         working-directory: qingclaw-dsh
         shell: bash
         run: |
-          trusted_ref='codex/qingclaw-bootstrap'
+          trusted_ref='beta'
           git fetch --no-tags origin "refs/heads/${trusted_ref}:refs/remotes/origin/${trusted_ref}"
           if ! git merge-base --is-ancestor HEAD "origin/${trusted_ref}"; then
             echo "Selected DSH ref is not part of ${trusted_ref}; refusing to expose release credentials" >&2
