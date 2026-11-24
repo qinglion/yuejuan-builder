@@ -254,3 +254,41 @@ diff --git a/packages/experimental/cua-macos/native/Info.plist b/packages/experi
      <key>CFBundleIconFile</key>
      <string>DSHComputerUse.icns</string>
      <key>CFBundlePackageType</key>
+diff --git a/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift b/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift
+--- a/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift
++++ b/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift
+@@ -1,4 +1,5 @@
+ // Compare independent window frames before capture or pointer delivery.
++import ApplicationServices
+ import CoreGraphics
+ 
+ enum WindowGeometry {
+@@ -34,6 +35,16 @@ enum WindowGeometry {
+         return after
+     }
+ 
++    /// Actor callers pass the AX reader as ordinary synchronous arguments; a
++    /// closure capture at the call site would transfer actor-isolated state
++    /// across isolation, which Swift 6.1/6.2 region analysis rejects.
++    static func resolve(
++        owner: ProcessIdentity, windowID: UInt32,
++        access: AXAccess, element: AXUIElement
++    ) throws -> WindowInfo {
++        try resolve(owner: owner, windowID: windowID, accessibilityBounds: { try access.bounds(element) })
++    }
++
+     /// CG must stay unchanged during the read. Integral point rectangles absorb frame representation rounding.
+     static func validate(before: WindowBounds, after: WindowBounds, accessibility: WindowBounds?) throws {
+         guard before == after else {
+diff --git a/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift b/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
+--- a/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
++++ b/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
+@@ -397,7 +397,7 @@ actor AXWorker {
+                 }
+                 elementWindow = enclosing.element
+                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
+-                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
++                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id, access: ax(), element: enclosing.element)
+                 point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
+             } else {
+                 let id = try params.windowID()

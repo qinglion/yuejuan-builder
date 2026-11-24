@@ -117,6 +117,10 @@ if ! grep -Fq '+    <string>com.qinglion.qingclaw.computer-use</string>' "${patc
   echo 'the packaging patch must rebrand the Computer Use helper bundle identifier' >&2
   exit 1
 fi
+if ! grep -Fq 'access: AXAccess, element: AXUIElement' "${patch}"; then
+  echo 'the packaging patch must carry the Swift 6.1/6.2 actor-closure compile fix' >&2
+  exit 1
+fi
 if grep -Fq 'select-artifact.ts' "${workflow}"; then
   echo 'the QingClaw workflow must not reuse official DeepSeek helper artifacts' >&2
   exit 1
