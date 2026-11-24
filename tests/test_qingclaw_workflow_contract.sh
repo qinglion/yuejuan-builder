@@ -117,6 +117,10 @@ if ! grep -Fq 'access: AXAccess, element: AXUIElement' "${patch}"; then
   echo 'the packaging patch must carry the Swift 6.1/6.2 actor-closure compile fix' >&2
   exit 1
 fi
+if ! grep -Fq "join(application, 'Contents/MacOS/dsh-cua-native'), '-verify_arch'" "${patch}"; then
+  echo 'the packaging patch must use the input-first lipo argument order' >&2
+  exit 1
+fi
 if grep -Fq 'select-artifact.ts' "${workflow}"; then
   echo 'the QingClaw workflow must not reuse official DeepSeek helper artifacts' >&2
   exit 1

@@ -292,3 +292,15 @@ diff --git a/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.s
                  point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
              } else {
                  let id = try params.windowID()
+diff --git a/scripts/cua-helper/package.ts b/scripts/cua-helper/package.ts
+--- a/scripts/cua-helper/package.ts
++++ b/scripts/cua-helper/package.ts
+@@ -55,7 +55,7 @@ async function main(): Promise<void> {
+   }
+   const verify = async (application: string, architecture: 'arm64' | 'x64'): Promise<void> => {
+     verifyMacOSRuntimeCode(application, signing)
+-    await run('/usr/bin/lipo', ['-verify_arch', architecture === 'x64' ? 'x86_64' : 'arm64', join(application, 'Contents/MacOS/dsh-cua-native')])
++    await run('/usr/bin/lipo', [join(application, 'Contents/MacOS/dsh-cua-native'), '-verify_arch', architecture === 'x64' ? 'x86_64' : 'arm64'])
+     await run('/usr/bin/xcrun', ['stapler', 'validate', application])
+     await run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', application])
+   }

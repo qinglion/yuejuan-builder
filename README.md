@@ -112,8 +112,9 @@ Authenticode 签名。不下载、不复用官方 DeepSeek 的 helper 产物或 
 macOS runner 镜像默认的 Xcode 16.4（Swift 6.1/6.2）会对 helper 的 actor 隔离
 同步闭包报 region-isolation 误报。补丁把 AXWorker 该处闭包捕获改为
 `WindowGeometry.resolve` 的普通同步参数重载（187 个 Swift 测试通过），Swift
-6.1–6.4 均可编译。helper 步骤保持镜像默认工具链：新版 Xcode 26 的 lipo 改变了
-参数顺序，与上游 verify 代码不兼容。
+6.1–6.4 均可编译。runner 镜像的 cctools lipo 要求输入文件在前，补丁把 helper
+verify 的 lipo 调用改为输入优先顺序（与 `scripts/ssh-helper/native.ts` 一致，
+新旧工具链通用）。
 
 打包补丁同时把 helper 的 bundle identifier 重品牌为
 `com.qinglion.qingclaw.computer-use`（显示名 `QingClaw Computer Use`），避免与官方
