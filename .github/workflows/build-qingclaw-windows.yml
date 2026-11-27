@@ -148,6 +148,12 @@ jobs:
           QINGCLAW_PLATFORM: windows
         run: node scripts/qingclaw/write-packaging-config.mjs
 
+      - name: Verify branded packaging inputs
+        working-directory: qingclaw-dsh
+        shell: bash
+        # Fails when the brand step above did not reach every input.
+        run: node scripts/qingclaw/brand-assets.mjs --check
+
       - name: Install DSH dependencies
         working-directory: qingclaw-dsh
         run: pnpm install --frozen-lockfile
