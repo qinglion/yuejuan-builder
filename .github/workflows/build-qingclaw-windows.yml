@@ -171,14 +171,15 @@ jobs:
         shell: bash
         env:
           QINGCLAW_PRODUCT_VERSION: ${{ inputs.product_version }}
-        run: node scripts/qingclaw/pin-product-version.mjs
+        # The script lives beside the workflows; the checkout it rewrites is the working directory.
+        run: node "${GITHUB_WORKSPACE}/scripts/qingclaw/pin-product-version.mjs"
 
       - name: Verify the pinned product version
         working-directory: qingclaw-dsh
         shell: bash
         env:
           QINGCLAW_PRODUCT_VERSION: ${{ inputs.product_version }}
-        run: node scripts/qingclaw/pin-product-version.mjs --check
+        run: node "${GITHUB_WORKSPACE}/scripts/qingclaw/pin-product-version.mjs" --check
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
