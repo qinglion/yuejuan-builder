@@ -4,6 +4,7 @@ set -euo pipefail
 workflow='.github/workflows/build-qingclaw-macos.yml'
 config='scripts/qingclaw/write-packaging-config.mjs'
 uploader='scripts/qingclaw/upload-desktop.sh'
+patch_file='scripts/qingclaw/patches/dsh-packaging.patch'
 
 grep -Fq 'repository: qinglion/qingclaw-dsh' "${workflow}"
 grep -Fq "node-version: '24.9.0'" "${workflow}"
@@ -19,6 +20,9 @@ grep -Fq 'Production releases must build the release branch or a dsh-v* tag' "${
 grep -Fq 'qingclaw-build-${{ inputs.version }}-${{ matrix.target }}' "${workflow}"
 grep -Fq "vars.QINGCLAW_TEST_RELEASE_ID" "${workflow}"
 grep -Fq 'https://d.qinglion.com' "${config}"
+# The production preset carries DOWNLOAD_PROD_ORIGIN; the patched preset reader
+# must accept that key or packaging stops at the first environment load.
+grep -Fq 'DOWNLOAD_(?:TEST_(?:ORIGIN|RELEASE_ID)|PROD_ORIGIN)' "${patch_file}"
 if [[ "$(grep -Fc 'upload-desktop.sh' "${workflow}")" -ne 1 ]]; then
   echo 'the package job must upload each architecture exactly once' >&2
   exit 1

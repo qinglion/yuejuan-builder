@@ -90,7 +90,7 @@ index 24aaa0ea2c..5c41f0b712 100644
      const releaseId = requiredEnvironmentValue(env, 'DOWNLOAD_TEST_RELEASE_ID')
      if (!/^[a-f0-9]{32}$/u.test(releaseId)) {
 diff --git a/apps/desktop/scripts/desktop-package-environment.mjs b/apps/desktop/scripts/desktop-package-environment.mjs
-index d301ac4b31..52b8adc2ec 100644
+index d301ac4b31..82a1534486 100644
 --- a/apps/desktop/scripts/desktop-package-environment.mjs
 +++ b/apps/desktop/scripts/desktop-package-environment.mjs
 @@ -15,10 +15,10 @@ import { resolveWindowsPackageSettings } from './windows-package-settings.mjs'
@@ -111,7 +111,7 @@ index d301ac4b31..52b8adc2ec 100644
    const settings = readSettings(path, name => preset === undefined
      ? SHARED_SETTING.test(name) || platformSetting.test(name)
 -    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
-+    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
++    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|UPDATE_ROOT|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_(?:TEST_(?:ORIGIN|RELEASE_ID)|PROD_ORIGIN))$/u.test(name) || publicPlatformSetting.test(name))
    if (preset !== undefined) {
      if (settings.DSH_DESKTOP_AUTO_UPDATE_ENV !== preset) throw new Error('desktop package: preset deployment must match its name')
      if (!options.unsigned && (platform === 'darwin' || !options.prepareOnly)) {
@@ -213,7 +213,7 @@ index 6ddec2781c..adfd5f2c76 100644
 +    ), secrets)
  }
 diff --git a/apps/desktop/scripts/package-macos.ts b/apps/desktop/scripts/package-macos.ts
-index 640c01960f..9cc74fc8a9 100644
+index be258fa5eb..43b24fdd2b 100644
 --- a/apps/desktop/scripts/package-macos.ts
 +++ b/apps/desktop/scripts/package-macos.ts
 @@ -5,7 +5,7 @@ import { mkdtemp, rename, rm, stat } from 'node:fs/promises'
@@ -235,6 +235,7 @@ index 640c01960f..9cc74fc8a9 100644
        }, secrets),
        timed('DMG creation and notarization', async () => {
 diff --git a/packages/experimental/cua-macos/native/Info.plist b/packages/experimental/cua-macos/native/Info.plist
+index d9bcb99834..6fbeee563e 100644
 --- a/packages/experimental/cua-macos/native/Info.plist
 +++ b/packages/experimental/cua-macos/native/Info.plist
 @@ -3,13 +3,13 @@
@@ -254,7 +255,21 @@ diff --git a/packages/experimental/cua-macos/native/Info.plist b/packages/experi
      <key>CFBundleIconFile</key>
      <string>DSHComputerUse.icns</string>
      <key>CFBundlePackageType</key>
+diff --git a/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift b/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
+index 47a66d7552..da1f22a398 100644
+--- a/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
++++ b/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
+@@ -424,7 +424,7 @@ actor AXWorker {
+                 }
+                 elementWindow = enclosing.element
+                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
+-                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
++                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id, access: ax(), element: enclosing.element)
+                 point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
+             } else {
+                 let id = try params.windowID()
 diff --git a/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift b/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift
+index 9977223187..0f397ba43f 100644
 --- a/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift
 +++ b/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeometry.swift
 @@ -1,4 +1,5 @@
@@ -280,19 +295,8 @@ diff --git a/packages/experimental/cua-macos/native/Sources/CuaNative/WindowGeom
      /// CG must stay unchanged during the read. Integral point rectangles absorb frame representation rounding.
      static func validate(before: WindowBounds, after: WindowBounds, accessibility: WindowBounds?) throws {
          guard before == after else {
-diff --git a/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift b/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
---- a/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
-+++ b/packages/experimental/cua-macos/native/Sources/CuaNative/AXWorker.swift
-@@ -397,7 +397,7 @@ actor AXWorker {
-                 }
-                 elementWindow = enclosing.element
-                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
--                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
-+                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id, access: ax(), element: enclosing.element)
-                 point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
-             } else {
-                 let id = try params.windowID()
 diff --git a/scripts/cua-helper/package.ts b/scripts/cua-helper/package.ts
+index 535285ae45..b7de434898 100644
 --- a/scripts/cua-helper/package.ts
 +++ b/scripts/cua-helper/package.ts
 @@ -55,7 +55,7 @@ async function main(): Promise<void> {
