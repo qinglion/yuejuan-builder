@@ -7,6 +7,11 @@ on:
         description: 'Full QingClaw build version (SemVer)'
         required: true
         type: string
+      product_version:
+        description: 'Product version every manifest takes in this build, for example 2.0.0'
+        required: true
+        type: string
+        default: '2.0.0'
       deployment:
         description: 'Update deployment'
         required: true
@@ -188,6 +193,23 @@ jobs:
       - name: Install DSH dependencies
         working-directory: qingclaw-dsh
         run: pnpm install --frozen-lockfile
+
+      - name: Pin the product version
+        # The checkout is throwaway: every manifest takes the product version this
+        # build publishes, so the repository never carries the 2.0 line and a later
+        # upstream sync keeps its own version numbers.
+        working-directory: qingclaw-dsh
+        shell: bash
+        env:
+          QINGCLAW_PRODUCT_VERSION: ${{ inputs.product_version }}
+        run: node scripts/qingclaw/pin-product-version.mjs
+
+      - name: Verify the pinned product version
+        working-directory: qingclaw-dsh
+        shell: bash
+        env:
+          QINGCLAW_PRODUCT_VERSION: ${{ inputs.product_version }}
+        run: node scripts/qingclaw/pin-product-version.mjs --check
 
       - name: Build and stage notarized Computer Use helpers
         # The workspace provider is packed into the Desktop runtime, so the installed
