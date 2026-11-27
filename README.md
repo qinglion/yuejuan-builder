@@ -66,6 +66,14 @@ bash release.sh
 GitHub 托管的 Intel 与 Apple Silicon macOS runner 上检出 `qinglion/qingclaw-dsh`，调用
 DSH 自己的签名、公证与更新清单命令，并在同一个 macOS job 内把产物上传到 OSS。
 
+正式版与测试版取自不同的分支：
+
+- `beta`：日常开发主线；测试构建（`deployment=test`、`nightly`）只接受它的提交；
+- `release`：正式环境分支，发布时把 `beta` 合并进来；生产构建（`deployment=production`、`stable`）只接受 `release` 分支或基于它的 `dsh-v*` tag；
+- `master`：只用于同步上游 `deepseek-ai/deepseek-harness`，不参与任何构建。
+
+工作流在打包前校验检出提交属于对应分支；正式版还要求 `dsh_ref` 就是 `release`（或 `dsh-v*` tag），否则拒绝使用发布凭据。
+
 官网下载、electron-updater 和打包上传共用同一个根：
 
 ```text

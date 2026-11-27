@@ -75,8 +75,22 @@ jobs:
         id: source
         working-directory: qingclaw-dsh
         shell: bash
+        env:
+          QINGCLAW_DEPLOYMENT: ${{ inputs.deployment }}
+          QINGCLAW_DSH_REF: ${{ inputs.dsh_ref }}
         run: |
-          trusted_ref='beta'
+          # Test builds follow beta; production builds the release branch, which only
+          # takes merges from beta at release time. master stays the upstream sync
+          # branch, so it never qualifies as a release source.
+          if [[ "${QINGCLAW_DEPLOYMENT}" == "production" ]]; then
+            trusted_ref='release'
+            if [[ "${QINGCLAW_DSH_REF}" != "release" && "${QINGCLAW_DSH_REF}" != dsh-v* ]]; then
+              echo 'Production releases must build the release branch or a dsh-v* tag' >&2
+              exit 1
+            fi
+          else
+            trusted_ref='beta'
+          fi
           git fetch --no-tags origin "refs/heads/${trusted_ref}:refs/remotes/origin/${trusted_ref}"
           if ! git merge-base --is-ancestor HEAD "origin/${trusted_ref}"; then
             echo "Selected DSH ref is not part of ${trusted_ref}; refusing to expose release credentials" >&2
