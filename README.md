@@ -74,6 +74,8 @@ DSH 自己的签名、公证与更新清单命令，并在同一个 macOS job �
 
 工作流在打包前校验检出提交属于对应分支；正式版还要求 `dsh_ref` 就是 `release`（或 `dsh-v*` tag），否则拒绝使用发布凭据。
 
+版本号沿用 `qingclaw-dsh` 清单里的 product version：正式版原样发布（首个正式版为 `0.2.3-alpha.2`）。同一 base 需要重发时递增后缀（`0.2.3-alpha.2.1`、`0.2.3-alpha.2.2`…），绝不复用已发布的版本号：electron-updater 用 semver 比较，同号不会触发更新，带版本号的安装包又是长期 immutable 缓存，重传同号对已安装用户无效。
+
 官网下载、electron-updater 和打包上传共用同一个根：
 
 ```text
