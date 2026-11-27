@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       product_version:
-        description: 'Product version every manifest takes in this build, for example 2.0.0'
+        description: 'Desktop product version, for example 2.0.0'
         required: true
         type: string
         default: '2.0.0'
@@ -164,7 +164,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Pin the product version
-        # The checkout is throwaway: every manifest takes the product version this
+        # The checkout is throwaway: the DSH product packages take the version this
         # build publishes, so the repository never carries the 2.0 line and a later
         # upstream sync keeps its own version numbers.
         working-directory: qingclaw-dsh

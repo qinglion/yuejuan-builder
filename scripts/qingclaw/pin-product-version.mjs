@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pin every manifest to the product version this build publishes.
+ * Pin the desktop product and its DSH packages to the requested release version.
  *
  * The checkout is throwaway: the pinned version reaches electron-builder, the
  * update feed and the upload validation, and never returns to the repository.
@@ -12,9 +12,9 @@
  *
  * @module scripts/qingclaw/pin-product-version
  */
-import { execFileSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const repo = process.cwd()
 const target = process.env.QINGCLAW_PRODUCT_VERSION?.trim()
@@ -24,22 +24,22 @@ if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(target)) {
 }
 
 const check = process.argv.includes('--check')
-const manifests = execFileSync('git', ['ls-files', '*package.json'], { cwd: repo, encoding: 'utf8' })
-  .split('\n')
-  .filter(path => path !== '' && !path.includes('node_modules/'))
+const { releasedManifests } = await import(pathToFileURL(join(repo, 'scripts/verify-version-sync.ts')).href)
+const manifests = ['package.json', ...releasedManifests(repo)]
 
 const changed = []
 for (const path of manifests) {
   const file = join(repo, path)
   const text = await readFile(file, 'utf8')
-  const field = /"version"\s*:\s*"([^"]*)"/u.exec(text)
-  if (field === null || field[1] === target) continue
+  const manifest = JSON.parse(text)
+  if (typeof manifest.version !== 'string') throw new Error(`Missing product version in ${path}`)
+  if (manifest.version === target) continue
   if (check) {
-    changed.push(`${path}: ${field[1]} -> ${target}`)
+    changed.push(`${path}: ${manifest.version} -> ${target}`)
     continue
   }
-  // Replace the value only, so formatting and key order stay as the repository wrote them.
-  await writeFile(file, text.replace(field[0], `"version": "${target}"`))
+  manifest.version = target
+  await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`)
   changed.push(path)
 }
 
@@ -49,7 +49,7 @@ if (check) {
     for (const path of changed) console.error(`  ${path}`)
     process.exitCode = 1
   } else {
-    console.log(`pin-product-version: every manifest carries ${target}`)
+    console.log(`pin-product-version: all product manifests carry ${target}`)
   }
 } else {
   console.log(`pin-product-version: pinned ${changed.length} manifest(s) to ${target}`)

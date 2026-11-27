@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       product_version:
-        description: 'Product version every manifest takes in this build, for example 2.0.0'
+        description: 'Desktop product version, for example 2.0.0'
         required: true
         type: string
         default: '2.0.0'
@@ -195,7 +195,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Pin the product version
-        # The checkout is throwaway: every manifest takes the product version this
+        # The checkout is throwaway: the DSH product packages take the version this
         # build publishes, so the repository never carries the 2.0 line and a later
         # upstream sync keeps its own version numbers.
         working-directory: qingclaw-dsh
@@ -240,6 +240,16 @@ jobs:
         env:
           DSH_PACKAGING_CONFIG_DIR: ${{ runner.temp }}/qingclaw-packaging
         run: pnpm run "package:desktop:mac:${QINGCLAW_ARCH}" -- --build-version "${QINGCLAW_VERSION}"
+
+      - name: Verify session file locking in the signed Mac update
+        shell: bash
+        working-directory: qingclaw-dsh
+        run: |
+          artifacts="apps/desktop/.desktop-build/targets/${QINGCLAW_TARGET}/artifacts"
+          extracted="$(mktemp -d "${RUNNER_TEMP}/qingclaw-flock.XXXXXX")"
+          trap 'rm -rf "${extracted}"' EXIT
+          ditto -x -k "${artifacts}/qingclaw-${QINGCLAW_VERSION}-mac-${QINGCLAW_ARCH}.zip" "${extracted}"
+          node "${GITHUB_WORKSPACE}/scripts/qingclaw/verify-macos-flock.mjs" "${extracted}/青狮龙虾.app" "${QINGCLAW_ARCH}"
 
       - name: Upload signed package to OSS
         if: ${{ inputs.publish }}
