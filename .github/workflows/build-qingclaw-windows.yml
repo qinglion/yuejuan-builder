@@ -113,6 +113,13 @@ jobs:
           corepack enable
           corepack prepare pnpm@11.28.5 --activate
 
+      - name: Apply QingClaw brand packaging inputs
+        working-directory: qingclaw-dsh
+        shell: bash
+        # The application icons and installer copy live upstream; this applies the
+        # distribution's artwork and product name to the staged checkout.
+        run: node scripts/qingclaw/brand-assets.mjs
+
       - name: Resolve test release ID
         id: release
         shell: bash
